@@ -1,0 +1,71 @@
+# 依赖
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# uni-app / HBuilderX 打包产物
+dist/
+unpackage/
+unpackage/**
+*.wgt
+*.apk
+*.ipa
+*.app
+*.aab
+
+# 微信开发者工具本地产物
+miniprogram_npm/
+project.private.config.json
+**/project.private.config.json
+
+# 本地环境与密钥（勿上传）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.keystore
+*.jks
+local.properties
+
+# uniCloud 本地与运行时
+uniCloud-aliyun/cloudfunctions/**/node_modules/
+uniCloud-tcb/cloudfunctions/**/node_modules/
+uniCloud-alipay/cloudfunctions/**/node_modules/
+**/.unicloud*
+**/unicloud_debug.log
+
+# 日志与缓存
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.cache/
+.temp/
+.tmp/
+.vite/
+.turbo/
+coverage/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.local
+.hbuilderx/
+.cursor/
+
+# 测试与杂项
+*.orig
+*.bak
+.eslintcache

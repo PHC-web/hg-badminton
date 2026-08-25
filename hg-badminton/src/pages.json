@@ -1,0 +1,129 @@
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^hg-(.*)": "@/components/hg-$1.vue"
+    }
+  },
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "追光羽毛球" }
+    },
+    {
+      "path": "pages/fixture/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "对阵表" }
+    },
+    {
+      "path": "pages/result/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "赛果" }
+    },
+    {
+      "path": "pages/mine/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的" }
+    },
+    {
+      "path": "pages/login/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "登录" }
+    },
+    {
+      "path": "pages/match/detail",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "比赛详情" }
+    },
+    {
+      "path": "pages/match/create",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "创建比赛" }
+    },
+    {
+      "path": "pages/match/password",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "比赛密码" }
+    },
+    {
+      "path": "pages/register/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的队伍" }
+    },
+    {
+      "path": "pages/register/review",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "报名审核" }
+    },
+    {
+      "path": "pages/fixture/detail",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "团体对阵详情" }
+    },
+    {
+      "path": "pages/fixture/score",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "裁判记分" }
+    },
+    {
+      "path": "pages/photo/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "比赛照片" }
+    },
+    {
+      "path": "pages/mine/apply",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "角色申请" }
+    },
+    {
+      "path": "pages/mine/apply-manage",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "角色审核" }
+    },
+    {
+      "path": "pages/mine/users",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "账号管理" }
+    },
+    {
+      "path": "pages/mine/matches",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的比赛" }
+    },
+    {
+      "path": "pages/mine/referee",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "我执裁的场次" }
+    },
+    {
+      "path": "pages/mine/photos",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "我的照片" }
+    },
+    {
+      "path": "pages/mine/settings",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "设置" }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "追光羽毛球",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F6F8",
+    "navigationStyle": "custom"
+  },
+  "tabBar": {
+    "color": "#9AA1A9",
+    "selectedColor": "#00A870",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "iconPath": "static/tab/home.png",
+        "selectedIconPath": "static/tab/home-active.png",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/fixture/index",
+        "iconPath": "static/tab/fixture.png",
+        "selectedIconPath": "static/tab/fixture-active.png",
+        "text": "对阵"
+      },
+      {
+        "pagePath": "pages/result/index",
+        "iconPath": "static/tab/result.png",
+        "selectedIconPath": "static/tab/result-active.png",
+        "text": "赛果"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "iconPath": "static/tab/mine.png",
+        "selectedIconPath": "static/tab/mine-active.png",
+        "text": "我的"
+      }
+    ]
+  }
+}

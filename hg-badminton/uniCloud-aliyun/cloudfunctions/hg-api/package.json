@@ -1,0 +1,14 @@
+{
+  "name": "hg-api",
+  "version": "1.0.0",
+  "description": "追光羽毛球业务云对象",
+  "main": "index.obj.js",
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 60,
+    "runtime": "Nodejs18"
+  },
+  "dependencies": {
+    "hg-core": "file:../common/hg-core"
+  }
+}

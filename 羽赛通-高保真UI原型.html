@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>羽赛通 · 羽毛球比赛管理小程序 高保真交互原型</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root{
+    --primary:#00A870; --primary-dark:#00875C; --primary-deep:#006B48;
+    --primary-light:#E6F7F0; --primary-line:#C9EFDF;
+    --accent:#FF7D33; --accent-light:#FFF1E8;
+    --bg:#F5F6F8; --card:#FFFFFF; --line:#EDEEF0;
+    --text:#1A1A1A; --text2:#5B6470; --text3:#9AA1A9;
+    --win:#00A870; --lose:#E5484D; --yellow:#FFC53D;
+    --radius:14px;
+    --shadow:0 2px 10px rgba(16,24,40,.05);
+  }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue","Microsoft YaHei",sans-serif; background:#E8EAED; color:var(--text); display:flex; justify-content:center; padding:28px 12px 40px; }
+  /* ---------- 页面说明区 ---------- */
+  .hint{ width:420px; margin-right:28px; }
+  .hint h1{ font-size:24px; margin-bottom:8px; }
+  .hint .sub{ color:#5B6470; font-size:14px; line-height:1.7; margin-bottom:16px; }
+  .hint .card{ background:#fff; border-radius:14px; padding:16px 18px; margin-bottom:12px; box-shadow:var(--shadow); }
+  .hint .card h3{ font-size:15px; margin-bottom:8px; }
+  .hint .card p{ font-size:13px; color:#5B6470; line-height:1.7; }
+  .hint .tag{ display:inline-block; background:var(--primary-light); color:var(--primary-deep); border-radius:20px; padding:2px 10px; font-size:12px; margin:2px 4px 2px 0; }
+  .hint .btn{ display:inline-block; background:var(--primary); color:#fff; border-radius:8px; padding:6px 14px; font-size:13px; margin-top:6px; border:none; cursor:pointer; }
+  /* ---------- 手机框 ---------- */
+  .phone{ width:390px; height:790px; background:#000; border-radius:44px; padding:10px; box-shadow:0 24px 60px rgba(0,0,0,.35); flex-shrink:0; position:sticky; top:20px; }
+  .phone-inner{ width:100%; height:100%; background:var(--bg); border-radius:36px; overflow:hidden; position:relative; display:flex; flex-direction:column; }
+  .status-bar{ height:30px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; font-size:12px; font-weight:600; color:var(--text); background:var(--card); }
+  .screen{ flex:1; overflow-y:auto; overflow-x:hidden; position:relative; background:var(--bg); scrollbar-width:none; }
+  .screen::-webkit-scrollbar{ display:none; }
+  /* ---------- 导航栏 ---------- */
+  .nav{ height:44px; display:flex; align-items:center; justify-content:center; position:relative; background:var(--card); font-size:17px; font-weight:600; flex-shrink:0; }
+  .nav .back{ position:absolute; left:8px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; color:var(--text); font-size:18px; cursor:pointer; border:none; background:none; }
+  .nav .right{ position:absolute; right:12px; font-size:13px; color:var(--primary); font-weight:500; background:none; border:none; cursor:pointer; }
+  .nav-dark{ background:linear-gradient(135deg,var(--primary) 0%,var(--primary-deep) 100%); color:#fff; }
+  .nav-dark .back{ color:#fff; }
+  /* ---------- 页面容器 ---------- */
+  .page{ display:none; min-height:100%; }
+  .page.active{ display:block; }
+  .pad{ padding:12px 14px; }
+  /* ---------- TabBar ---------- */
+  .tab-bar{ height:58px; background:var(--card); border-top:1px solid var(--line); display:flex; flex-shrink:0; }
+  .tab{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; color:var(--text3); cursor:pointer; font-size:10px; }
+  .tab.active{ color:var(--primary); }
+  .tab svg{ width:24px; height:24px; }
+  /* ---------- 通用组件 ---------- */
+  .card{ background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); }
+  .section-title{ font-size:15px; font-weight:600; margin:14px 2px 8px; display:flex; align-items:center; justify-content:space-between; }
+  .section-title .more{ font-size:12px; color:var(--primary); font-weight:400; cursor:pointer; }
+  .chip{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; background:#F0F1F3; color:var(--text2); }
+  .chip-green{ background:var(--primary-light); color:var(--primary-deep); }
+  .chip-orange{ background:var(--accent-light); color:#D75A1A; }
+  .chip-red{ background:#FDECEC; color:#C73E44; }
+  .chip-gray{ background:#F0F1F3; color:var(--text3); }
+  .row{ display:flex; align-items:center; }
+  .btn-primary{ background:var(--primary); color:#fff; border:none; border-radius:12px; height:46px; font-size:16px; font-weight:600; width:100%; cursor:pointer; }
+  .btn-primary:active{ background:var(--primary-dark); }
+  .btn-ghost{ background:var(--primary-light); color:var(--primary-deep); border:none; border-radius:12px; height:44px; font-size:15px; font-weight:600; width:100%; cursor:pointer; }
+  .btn-danger{ background:#FDECEC; color:#C73E44; border:none; border-radius:12px; height:44px; font-size:15px; font-weight:600; width:100%; cursor:pointer; }
+  .input, .select, .textarea{ width:100%; height:44px; border:1px solid var(--line); border-radius:10px; padding:0 12px; font-size:14px; background:#FAFBFC; outline:none; color:var(--text); }
+  .input:focus{ border-color:var(--primary); background:#fff; }
+  .textarea{ height:72px; padding:10px 12px; resize:none; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:13px; color:var(--text2); margin-bottom:6px; }
+  .field label .req{ color:var(--lose); margin-left:2px; }
+  /* ---------- 首页 ---------- */
+  .hero{ background:linear-gradient(135deg,#00B87A 0%,#00875C 60%,#006B48 100%); border-radius:0 0 20px 20px; padding:14px 14px 44px; color:#fff; position:relative; }
+  .hero-top{ display:flex; justify-content:space-between; align-items:center; }
+  .hero-top .greet{ font-size:13px; opacity:.85; }
+  .hero-top .name{ font-size:18px; font-weight:700; margin-top:2px; }
+  .hero-avatar{ width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .hero-search{ margin-top:14px; background:rgba(255,255,255,.18); border-radius:10px; height:38px; display:flex; align-items:center; padding:0 12px; gap:8px; font-size:13px; color:rgba(255,255,255,.75); backdrop-filter:blur(4px); }
+  .stat-cards{ margin:-30px 14px 0; display:flex; gap:10px; }
+  .stat-card{ flex:1; background:var(--card); border-radius:14px; padding:12px 10px; box-shadow:var(--shadow); text-align:center; cursor:pointer; }
+  .stat-card .num{ font-size:20px; font-weight:700; color:var(--primary); }
+  .stat-card .lbl{ font-size:11px; color:var(--text2); margin-top:2px; }
+  .match-card{ background:var(--card); border-radius:14px; box-shadow:var(--shadow); padding:14px; margin-bottom:10px; cursor:pointer; position:relative; }
+  .match-card .top{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .match-card .mname{ font-size:16px; font-weight:700; margin-bottom:6px; }
+  .match-card .meta{ font-size:12px; color:var(--text2); line-height:1.8; }
+  .match-card .foot{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12px; color:var(--text3); }
+  .match-card .enter{ color:var(--primary); font-weight:600; }
+  .status-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; }
+  /* ---------- 比赛详情 ---------- */
+  .detail-hero{ background:linear-gradient(135deg,#00B87A,#006B48); color:#fff; padding:16px 16px 20px; position:relative; }
+  .detail-hero .tag-row{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .detail-hero .mini-tag{ background:rgba(255,255,255,.2); border-radius:6px; padding:3px 8px; font-size:11px; }
+  .detail-hero h2{ font-size:20px; font-weight:700; margin-bottom:8px; }
+  .detail-hero .meta{ font-size:12px; opacity:.9; line-height:1.8; }
+  .detail-tabs{ display:flex; background:var(--card); border-radius:12px; margin:12px 14px 0; padding:4px; }
+  .detail-tab{ flex:1; text-align:center; padding:8px 0; font-size:13px; color:var(--text2); border-radius:9px; cursor:pointer; }
+  .detail-tab.active{ background:var(--primary-light); color:var(--primary-deep); font-weight:600; }
+  .quick-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:10px 0; }
+  .quick-item{ background:var(--card); border-radius:12px; padding:12px 4px; text-align:center; cursor:pointer; box-shadow:var(--shadow); }
+  .quick-item .ic{ font-size:22px; }
+  .quick-item .lbl{ font-size:11px; color:var(--text2); margin-top:4px; }
+  .info-row{ display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #F7F8FA; }
+  .info-row .k{ width:72px; color:var(--text3); flex-shrink:0; }
+  .info-row .v{ color:var(--text); flex:1; }
+  .rule-box{ background:var(--primary-light); border-radius:10px; padding:10px 12px; margin:10px 14px; font-size:12px; color:var(--primary-deep); line-height:1.8; }
+  /* ---------- 创建比赛 ---------- */
+  .steps{ display:flex; padding:12px 14px 0; align-items:center; }
+  .step{ display:flex; align-items:center; gap:6px; flex:1; }
+  .step .dot{ width:22px; height:22px; border-radius:50%; background:#E6E8EB; color:var(--text3); font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:600; }
+  .step.active .dot{ background:var(--primary); color:#fff; }
+  .step.done .dot{ background:var(--primary-light); color:var(--primary-deep); }
+  .step .line{ flex:1; height:2px; background:#E6E8EB; }
+  .step.done .line{ background:var(--primary-line); }
+  .option-card{ border:1.5px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; cursor:pointer; background:#fff; }
+  .option-card.selected{ border-color:var(--primary); background:var(--primary-light); }
+  .option-card .t{ font-size:14px; font-weight:600; }
+  .option-card .d{ font-size:12px; color:var(--text2); margin-top:3px; }
+  .item-chip{ display:inline-flex; align-items:center; gap:4px; background:#F0F1F3; border-radius:8px; padding:6px 10px; margin:0 8px 8px 0; font-size:13px; }
+  .item-chip .del{ color:var(--text3); cursor:pointer; }
+  .switch{ width:44px; height:26px; border-radius:13px; background:#E6E8EB; position:relative; cursor:pointer; flex-shrink:0; }
+  .switch.on{ background:var(--primary); }
+  .switch::after{ content:""; position:absolute; width:22px; height:22px; border-radius:50%; background:#fff; top:2px; left:2px; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+  .switch.on::after{ left:20px; }
+  .bottom-actions{ position:sticky; bottom:0; background:var(--card); padding:10px 14px 14px; border-top:1px solid var(--line); display:flex; gap:10px; }
+  /* ---------- 报名 ---------- */
+  .team-head{ background:var(--card); border-radius:14px; padding:16px; box-shadow:var(--shadow); }
+  .avatar{ width:36px; height:36px; border-radius:50%; background:var(--primary-light); color:var(--primary-deep); display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:600; flex-shrink:0; }
+  .member-row{ display:flex; align-items:center; gap:10px; padding:10px 2px; border-bottom:1px solid #F7F8FA; }
+  .member-row:last-child{ border-bottom:none; }
+  .item-list{ display:flex; flex-direction:column; gap:8px; }
+  .item-slot{ display:flex; align-items:center; justify-content:space-between; background:var(--card); border-radius:12px; padding:12px 14px; box-shadow:var(--shadow); cursor:pointer; }
+  .item-slot .left .n{ font-size:14px; font-weight:600; }
+  .item-slot .left .s{ font-size:11px; color:var(--text3); margin-top:2px; }
+  .item-slot .right{ color:var(--primary); font-size:12px; }
+  /* ---------- 对阵表 ---------- */
+  .seg{ display:flex; background:#EDEEF1; border-radius:10px; padding:3px; gap:3px; }
+  .seg-item{ flex:1; text-align:center; padding:7px 0; font-size:12px; border-radius:8px; color:var(--text2); cursor:pointer; }
+  .seg-item.active{ background:#fff; color:var(--primary); font-weight:600; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  table.mini{ width:100%; border-collapse:collapse; font-size:12px; }
+  table.mini th{ color:var(--text3); font-weight:500; padding:8px 4px; border-bottom:1px solid var(--line); text-align:center; }
+  table.mini td{ padding:9px 4px; text-align:center; border-bottom:1px solid #F7F8FA; }
+  table.mini td.name{ text-align:left; }
+  .bracket{ display:flex; gap:16px; overflow-x:auto; padding-bottom:6px; }
+  .bracket-col{ flex:1; min-width:90px; display:flex; flex-direction:column; justify-content:space-around; gap:18px; }
+  .b-node{ background:#fff; border-radius:8px; box-shadow:var(--shadow); padding:8px; font-size:11px; text-align:center; position:relative; }
+  .b-node .tn{ font-weight:600; font-size:12px; margin-bottom:2px; }
+  .b-node.win{ border:1.5px solid var(--primary); }
+  .fixture-card{ background:var(--card); border-radius:12px; padding:12px; margin-bottom:8px; box-shadow:var(--shadow); cursor:pointer; }
+  .fixture-card .vs{ display:flex; align-items:center; justify-content:space-between; }
+  .fixture-card .team{ font-size:14px; font-weight:600; flex:1; }
+  .fixture-card .team.r{ text-align:right; }
+  .fixture-card .score{ font-size:20px; font-weight:700; color:var(--primary); padding:0 12px; }
+  .fixture-card .info{ display:flex; justify-content:space-between; font-size:11px; color:var(--text3); margin-top:8px; }
+  /* ---------- 记分 ---------- */
+  .score-header{ background:linear-gradient(135deg,#00B87A,#006B48); color:#fff; padding:14px 16px; text-align:center; }
+  .score-header .setinfo{ font-size:12px; opacity:.85; }
+  .score-header .teams{ display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  .score-header .teams .tn{ font-size:14px; font-weight:600; flex:1; }
+  .score-header .teams .cs{ font-size:30px; font-weight:800; width:70px; }
+  .score-board{ background:var(--card); border-radius:16px; margin:12px 14px; padding:18px 14px 14px; box-shadow:var(--shadow); }
+  .score-board .cur-label{ text-align:center; font-size:12px; color:var(--text3); margin-bottom:10px; }
+  .score-nums{ display:flex; align-items:center; justify-content:space-between; }
+  .score-nums .num{ font-size:64px; font-weight:800; line-height:1; }
+  .score-nums .num.a{ color:var(--primary-deep); }
+  .score-nums .num.b{ color:var(--text); }
+  .score-nums .colon{ font-size:28px; color:var(--text3); font-weight:600; }
+  .btn-col{ display:flex; justify-content:space-between; gap:14px; margin:12px 14px; }
+  .btn-col .side{ flex:1; display:flex; flex-direction:column; gap:8px; }
+  .plus-btn{ height:56px; border-radius:14px; border:none; font-size:22px; font-weight:700; cursor:pointer; }
+  .plus-a{ background:var(--primary-light); color:var(--primary-deep); }
+  .plus-b{ background:#F0F1F3; color:var(--text); }
+  .plus-btn:active{ transform:scale(.96); }
+  .notice{ background:var(--accent-light); border-radius:10px; padding:9px 12px; margin:0 14px 8px; font-size:12px; color:#C96A2A; display:flex; align-items:center; gap:6px; }
+  .notice.live{ background:var(--primary-light); color:var(--primary-deep); }
+  /* ---------- 赛果 ---------- */
+  .champion{ background:linear-gradient(135deg,#FFC53D,#F79B2A); border-radius:16px; padding:16px; color:#7A4B00; position:relative; overflow:hidden; }
+  .champion .t1{ font-size:12px; opacity:.8; }
+  .champion .t2{ font-size:24px; font-weight:800; margin-top:4px; }
+  .champion .t3{ font-size:12px; margin-top:4px; opacity:.85; }
+  .rank-row{ display:flex; align-items:center; padding:11px 12px; border-bottom:1px solid #F7F8FA; font-size:13px; }
+  .rank-row .rk{ width:24px; text-align:center; font-weight:700; color:var(--text3); }
+  .rank-row .rk.g{ color:#F79B2A; }
+  .rank-row .rk.s{ color:var(--text3); }
+  .rank-row .nm{ flex:1; font-weight:600; }
+  .rank-row .pts{ color:var(--primary); font-weight:700; }
+  /* ---------- 照片墙 ---------- */
+  .photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+  .photo-grid .ph{ aspect-ratio:1; border-radius:6px; overflow:hidden; position:relative; cursor:pointer; }
+  .ph .bg{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:30px; }
+  .ph .tag{ position:absolute; left:4px; bottom:4px; background:rgba(0,0,0,.45); color:#fff; font-size:9px; border-radius:4px; padding:1px 5px; }
+  .upload-box{ aspect-ratio:1; border:1.5px dashed var(--primary-line); border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--primary); cursor:pointer; gap:4px; font-size:11px; }
+  /* ---------- 我的 ---------- */
+  .role-switch{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .role-btn{ border:1.5px solid var(--line); background:#fff; border-radius:20px; padding:7px 14px; font-size:13px; cursor:pointer; color:var(--text2); }
+  .role-btn.on{ border-color:var(--primary); background:var(--primary-light); color:var(--primary-deep); font-weight:600; }
+  .menu-list{ background:var(--card); border-radius:14px; overflow:hidden; box-shadow:var(--shadow); }
+  .menu-item{ display:flex; align-items:center; padding:14px 16px; border-bottom:1px solid #F7F8FA; cursor:pointer; }
+  .menu-item:last-child{ border-bottom:none; }
+  .menu-item .mi{ width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; margin-right:12px; }
+  .menu-item .lt{ flex:1; font-size:14px; }
+  .menu-item .rs{ color:var(--text3); font-size:12px; }
+  /* ---------- 弹层 ---------- */
+  .mask{ position:absolute; inset:0; background:rgba(0,0,0,.45); display:none; align-items:flex-end; z-index:50; }
+  .mask.show{ display:flex; }
+  .sheet{ background:#fff; width:100%; border-radius:16px 16px 0 0; padding:16px 16px 26px; animation:up .25s ease; }
+  @keyframes up{ from{ transform:translateY(60px); opacity:0;} to{ transform:translateY(0); opacity:1;} }
+  .sheet h3{ font-size:16px; margin-bottom:12px; }
+  .sheet .bar{ width:36px; height:4px; background:#E6E8EB; border-radius:2px; margin:0 auto 12px; }
+  .toast{ position:absolute; left:50%; top:40%; transform:translateX(-50%); background:rgba(0,0,0,.75); color:#fff; font-size:13px; padding:10px 18px; border-radius:10px; display:none; z-index:99; white-space:nowrap; }
+  .toast.show{ display:block; animation:fade .3s; }
+  @keyframes fade{ from{ opacity:0; } to{ opacity:1; } }
+  .footnote{ font-size:11px; color:var(--text3); text-align:center; padding:8px 0 4px; }
+  .narrow{ max-width:1200px; }
+</style>
+</head>
+<body>
+
+<!-- ============ 左侧说明 ============ -->
+<div class="hint">
+  <h1>🏸 羽赛通 · 高保真交互原型</h1>
+  <p class="sub">羽毛球比赛管理微信小程序（uni-app）。点击右侧手机界面可交互体验，覆盖 5 种角色的核心流程。</p>
+  <div class="card">
+    <h3>已实现的关键流程</h3>
+    <p>
+      <span class="tag">管理员创建比赛</span><span class="tag">赛制/项目/规则配置</span><span class="tag">队长报名</span>
+      <span class="tag">对阵表生成</span><span class="tag">裁判实时记分</span><span class="tag">赛果排行</span><span class="tag">照片墙</span>
+    </p>
+    <p style="margin-top:8px;">下方区域随点击变化，展示对应页面的产品说明。</p>
+  </div>
+  <div class="card" id="descCard">
+    <h3>💡 当前页面：比赛列表（首页）</h3>
+    <p>全部角色的统一入口。顶部展示进行中/未开始/已结束比赛，支持搜索；底部统计卡直达"我的比赛""我执裁的场次"。点击比赛卡片进入比赛详情。</p>
+  </div>
+  <div class="card">
+    <h3>🎮 试玩建议</h3>
+    <p>① 首页 → 点"夏季羽毛球团体赛"进入详情；② 详情页底部"去报名"体验队长报名；③ 底部 Tab「对阵」先选比赛再查看三种晋级方式视图，点击一场对阵进入详情，裁判视角点"开始记分"体验记分交互；④ Tab「赛果」先选比赛再看排行榜；⑤ Tab「我的」可切换角色模拟不同身份，点"角色申请"体验申请流程；⑥ 管理员点"创建比赛"体验五步表单（含访问控制配置）。</p>
+  </div>
+</div>
+
+<!-- ============ 手机 ============ -->
+<div class="phone">
+  <div class="phone-inner">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span>📶 🔋 100%</span>
+    </div>
+
+    <!-- 屏幕滚动容器 -->
+    <div class="screen" id="screen">
+
+      <!-- ========== P1 首页 ========== -->
+      <div class="page active" id="p-home">
+        <div class="hero">
+          <div class="hero-top">
+            <div>
+              <div class="greet">你好，林教练</div>
+              <div class="name">今日有 3 场比赛待进行</div>
+            </div>
+            <div class="hero-avatar" onclick="go('mine')">👤</div>
+          </div>
+          <div class="hero-search">🔍 搜索比赛名称 / 队伍</div>
+        </div>
+        <div class="stat-cards">
+          <div class="stat-card" onclick="toast('已筛选：进行中')"><div class="num">2</div><div class="lbl">进行中</div></div>
+          <div class="stat-card" onclick="toast('已筛选：未开始')"><div class="num">3</div><div class="lbl">未开始</div></div>
+          <div class="stat-card" onclick="toast('已筛选：已结束')"><div class="num">5</div><div class="lbl">已结束</div></div>
+          <div class="stat-card" onclick="toast('我的报名/执裁场次')"><div class="num">4</div><div class="lbl">我的比赛</div></div>
+        </div>
+        <div class="pad">
+          <div class="section-title">比赛列表 <span class="more" onclick="toast('暂无更多')">全部 ›</span></div>
+          <div class="match-card" onclick="go('match-detail')">
+            <div class="top">
+              <div>
+                <div class="mname">2026 羽协夏季团体赛</div>
+                <div class="meta">🗓 08.22 - 08.23　📍 市体育馆羽毛球馆<br>👥 12 支队伍 · 24 场 · 108 名队员</div>
+              </div>
+              <span class="chip chip-green">进行中</span>
+            </div>
+            <div class="foot"><span><span class="status-dot" style="background:var(--primary)"></span>小组赛第 2 轮</span><span class="enter">查看详情 ›</span></div>
+          </div>
+          <div class="match-card" onclick="go('match-detail')">
+            <div class="top">
+              <div>
+                <div class="mname">企业内部友谊联赛</div>
+                <div class="meta">🗓 09.05 - 09.20　📍 华润文体中心<br>👥 8 支队伍 · 报名截止 09.01</div>
+              </div>
+              <span class="chip chip-orange">报名中</span>
+            </div>
+            <div class="foot"><span><span class="status-dot" style="background:#F79B2A"></span>距截止 14 天</span><span class="enter">我要报名 ›</span></div>
+          </div>
+          <div class="match-card" onclick="toast('这是一场已结束的比赛')">
+            <div class="top">
+              <div>
+                <div class="mname">春季俱乐部排名赛</div>
+                <div class="meta">🗓 06.10 - 06.11　📍 羽你同行球馆<br>👥 10 支队伍 · 冠军：飞羽俱乐部</div>
+              </div>
+              <span class="chip chip-gray">已结束</span>
+            </div>
+            <div class="foot"><span>冠军已产生</span><span class="enter">查看赛果 ›</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== P2 比赛详情 ========== -->
+      <div class="page" id="p-match-detail">
+        <div class="nav"><button class="back" onclick="go('home')">‹</button><span>比赛详情</span><button class="right" onclick="toast('已收藏')">☆</button></div>
+        <div class="detail-hero">
+          <div class="tag-row"><span class="mini-tag">团体赛</span><span class="mini-tag">小组赛+淘汰赛</span><span class="mini-tag">21 分制</span></div>
+          <h2>2026 羽协夏季团体赛</h2>
+          <div class="meta">🗓 08.22 - 08.23 09:00　📍 市体育馆羽毛球馆<br>👥 12 支队伍 · 24 场 · 报名截止 08.15</div>
+        </div>
+        <div class="detail-tabs">
+          <div class="detail-tab active" onclick="switchDetail(this,'d-overview')">概况</div>
+          <div class="detail-tab" onclick="switchDetail(this,'d-schedule')">赛程</div>
+          <div class="detail-tab" onclick="switchDetail(this,'d-rules')">赛制规则</div>
+          <div class="detail-tab" onclick="switchDetail(this,'d-teams')">队伍</div>
+        </div>
+        <div class="pad">
+          <div id="d-overview">
+            <div class="quick-grid">
+              <div class="quick-item" onclick="go('fixture')"><div class="ic">🗓️</div><div class="lbl">对阵表</div></div>
+              <div class="quick-item" onclick="go('register')"><div class="ic">📝</div><div class="lbl">去报名</div></div>
+              <div class="quick-item" onclick="go('result')"><div class="ic">🏆</div><div class="lbl">赛果</div></div>
+              <div class="quick-item" onclick="go('photo')"><div class="ic">📷</div><div class="lbl">照片墙</div></div>
+            </div>
+            <div class="card" style="overflow:hidden;">
+              <div class="section-title" style="padding:0 14px; margin-top:12px;">比赛信息</div>
+              <div class="info-row"><span class="k">比赛状态</span><span class="v"><span class="chip chip-green">小组赛进行中</span></span></div>
+              <div class="info-row"><span class="k">赛制类型</span><span class="v">团体赛（单项制）</span></div>
+              <div class="info-row"><span class="k">晋级方式</span><span class="v">小组循环 + 淘汰赛</span></div>
+              <div class="info-row"><span class="k">比赛项目</span><span class="v">男单 / 女单 / 男双 / 女双 / 混双</span></div>
+              <div class="info-row"><span class="k">记分规则</span><span class="v">21 分制 · 三局两胜 · 平分净胜 2 分 · 30 分封顶</span></div>
+              <div class="info-row"><span class="k">团体规则</span><span class="v">先赢 3 个单项者获胜</span></div>
+              <div class="info-row"><span class="k">比赛公告</span><span class="v">请各队 08.22 上午 8:30 前到场签到；运动员需着运动服入场。</span></div>
+            </div>
+            <div class="rule-box">📌 记分说明：每球得分制；20 平后需连续得 2 分，先到 30 分者胜；每局结束双方交换场地，局间休息 120 秒。</div>
+            <div style="display:flex; gap:10px; margin-top:12px;">
+              <button class="btn-ghost" onclick="go('fixture')">查看对阵</button>
+              <button class="btn-primary" onclick="go('register')">去报名</button>
+            </div>
+            <div style="margin-top:10px; display:flex; gap:10px;">
+              <button class="btn-ghost" onclick="toast('生成对阵表成功（演示）')">⚙ 生成对阵</button>
+              <button class="btn-ghost" onclick="toast('已指派裁判（演示）')">👨‍⚖️ 指派裁判</button>
+            </div>
+          </div>
+          <div id="d-schedule" style="display:none;">
+            <div class="card" style="overflow:hidden; margin-top:12px;">
+              <div class="section-title" style="padding:0 14px; margin-top:12px;">比赛日程</div>
+              <div class="info-row"><span class="k">08.22 上午</span><span class="v">小组赛 A/B 组</span></div>
+              <div class="info-row"><span class="k">08.22 下午</span><span class="v">小组赛 C/D 组</span></div>
+              <div class="info-row"><span class="k">08.23 上午</span><span class="v">八强淘汰赛</span></div>
+              <div class="info-row"><span class="k">08.23 下午</span><span class="v">半决赛 / 决赛</span></div>
+            </div>
+          </div>
+          <div id="d-rules" style="display:none;">
+            <div class="card" style="overflow:hidden; margin-top:12px;">
+              <div class="section-title" style="padding:0 14px; margin-top:12px;">比赛项目（5 项）</div>
+              <div style="padding:6px 14px 12px;">
+                <span class="chip chip-green">男单 · 1 人</span>
+                <span class="chip chip-green">女单 · 1 人</span>
+                <span class="chip chip-green">男双 · 2 人</span>
+                <span class="chip chip-green">女双 · 2 人</span>
+                <span class="chip chip-green">混双 · 2 人</span>
+              </div>
+              <div class="info-row"><span class="k">记分规则</span><span class="v">21 分制（可选 15 分制）</span></div>
+              <div class="info-row"><span class="k">局数</span><span class="v">三局两胜</span></div>
+              <div class="info-row"><span class="k">平分规则</span><span class="v">净胜 2 分</span></div>
+              <div class="info-row"><span class="k">封顶分数</span><span class="v">30 分</span></div>
+              <div class="info-row"><span class="k">团体胜负</span><span class="v">先赢 3 项获胜</span></div>
+              <div class="info-row"><span class="k">兼项限制</span><span class="v">默认不允许兼项</span></div>
+            </div>
+          </div>
+          <div id="d-teams" style="display:none;">
+            <div class="card" style="margin-top:12px; padding:6px 14px 10px;">
+              <div style="display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid #F7F8FA;">
+                <div class="avatar">飞</div><div><div style="font-weight:600;font-size:14px;">飞羽俱乐部</div><div style="font-size:11px;color:var(--text3);">队长：李飞 · 9 人 · 已审核</div></div>
+                <div style="flex:1"></div><span class="chip chip-green">A 组</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid #F7F8FA;">
+                <div class="avatar">体</div><div><div style="font-weight:600;font-size:14px;">体育中心队</div><div style="font-size:11px;color:var(--text3);">队长：王磊 · 10 人 · 已审核</div></div>
+                <div style="flex:1"></div><span class="chip chip-green">B 组</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid #F7F8FA;">
+                <div class="avatar">迅</div><div><div style="font-weight:600;font-size:14px;">迅捷羽球队</div><div style="font-size:11px;color:var(--text3);">队长：赵迅 · 8 人 · 待审核</div></div>
+                <div style="flex:1"></div><span class="chip chip-orange">待审核</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:12px 0;">
+                <div class="avatar">晨</div><div><div style="font-weight:600;font-size:14px;">晨光俱乐部</div><div style="font-size:11px;color:var(--text3);">队长：陈晨 · 9 人 · 已驳回</div></div>
+                <div style="flex:1"></div><span class="chip chip-red">已驳回</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== P3 创建比赛 ========== -->
+      <div class="page" id="p-create">
+        <div class="nav"><button class="back" onclick="go('home')">‹</button><span>创建比赛</span><button class="right" onclick="toast('已存草稿')">存草稿</button></div>
+        <div class="steps" id="createSteps">
+          <div class="step active" data-s="0"><span class="dot">1</span><span class="line"></span></div>
+          <div class="step" data-s="1"><span class="dot">2</span><span class="line"></span></div>
+          <div class="step" data-s="2"><span class="dot">3</span><span class="line"></span></div>
+          <div class="step" data-s="3"><span class="dot">4</span><span class="line"></span></div>
+          <div class="step" data-s="4"><span class="dot">5</span></div>
+        </div>
+        <div class="pad" id="createBody">
+          <!-- 步骤1：基本信息 -->
+          <div class="create-step" data-step="0">
+            <div class="field"><label>比赛名称<span class="req">*</span></label><input class="input" placeholder="如：2026 羽协夏季团体赛"></div>
+            <div class="field"><label>举办地点<span class="req">*</span></label><input class="input" placeholder="如：市体育馆羽毛球馆"></div>
+            <div class="field"><label>开赛日期<span class="req">*</span></label><input class="input" value="2026-08-22 09:00"></div>
+            <div class="field"><label>报名截止时间<span class="req">*</span></label><input class="input" value="2026-08-15 23:59"></div>
+            <div class="field"><label>比赛公告</label><textarea class="textarea" placeholder="比赛注意事项、签到要求等…"></textarea></div>
+          </div>
+          <!-- 步骤2：赛制 -->
+          <div class="create-step" data-step="1" style="display:none;">
+            <div class="option-card selected"><div class="t">团体赛</div><div class="d">以队伍为单位参赛，一场团体赛含多个单项（男单/女单/男双/女双/混双）</div></div>
+            <div class="section-title" style="margin-top:6px;">晋级方式</div>
+            <div class="option-card selected" onclick="pickOption(this,'小组赛+淘汰赛')"><div class="t">小组赛 + 淘汰赛</div><div class="d">先分组循环，各组前 2 名出线进入淘汰赛</div></div>
+            <div class="option-card" onclick="pickOption(this,'单淘汰赛')"><div class="t">单淘汰赛</div><div class="d">两两对阵直接晋级，适合快速决出冠军</div></div>
+            <div class="option-card" onclick="pickOption(this,'单循环积分赛')"><div class="t">单循环积分赛</div><div class="d">全部队伍两两交手，按积分排名</div></div>
+          </div>
+          <!-- 步骤3：比赛项目 -->
+          <div class="create-step" data-step="2" style="display:none;">
+            <div class="section-title">比赛项目 <span class="more" onclick="toast('最多可添加 6 个单项')">＋ 添加项目</span></div>
+            <div>
+              <span class="item-chip">男单 · 1 人 <span class="del" onclick="this.parentElement.remove()">✕</span></span>
+              <span class="item-chip">女单 · 1 人 <span class="del" onclick="this.parentElement.remove()">✕</span></span>
+              <span class="item-chip">男双 · 2 人 <span class="del" onclick="this.parentElement.remove()">✕</span></span>
+              <span class="item-chip">女双 · 2 人 <span class="del" onclick="this.parentElement.remove()">✕</span></span>
+              <span class="item-chip">混双 · 2 人 <span class="del" onclick="this.parentElement.remove()">✕</span></span>
+            </div>
+            <div class="field" style="margin-top:14px;"><label>团体获胜条件</label>
+              <div class="option-card selected" onclick="pickOption(this,'先赢 3 个单项获胜')"><div class="t">① 先赢 3 个单项获胜</div><div class="d">5 项制默认规则（苏迪曼杯式），一旦锁定 3:0/3:1 即结束</div></div>
+              <div class="option-card" onclick="pickOption(this,'打满全部单项')"><div class="t">② 打满全部单项</div><div class="d">5 项全部打完，按总胜场数判定胜负，适合同等锻炼/全员参与</div></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 2px;">
+              <div><div style="font-size:14px;font-weight:600;">不允许兼项</div><div style="font-size:12px;color:var(--text2);">同一队员只能报名一个单项</div></div>
+              <div class="switch on" onclick="this.classList.toggle('on')"></div>
+            </div>
+          </div>
+          <!-- 步骤4：记分规则 -->
+          <div class="create-step" data-step="3" style="display:none;">
+            <div class="section-title">记分规则</div>
+            <div class="option-card selected" onclick="pickOption(this,'21 分制')"><div class="t">21 分制</div><div class="d">每球得分制 · 20 平后净胜 2 分获胜</div></div>
+            <div class="option-card" onclick="pickOption(this,'15 分制')"><div class="t">15 分制</div><div class="d">每球得分制 · 14 平后净胜 2 分获胜</div></div>
+            <div class="field" style="margin-top:6px;"><label>比赛局数</label>
+              <div class="option-card selected" onclick="pickOption(this,'三局两胜')"><div class="t">三局两胜</div><div class="d">先赢 2 局者赢得本场单项</div></div>
+            </div>
+            <div class="info-row" style="background:var(--card); border-radius:10px; padding:12px;">
+              <span class="k">封顶分数</span><span class="v">30 分（先到者胜）</span>
+            </div>
+            <div class="rule-box" style="margin:12px 0;">📌 规则预览：21 分制 · 三局两胜 · 平分净胜 2 分 · 30 分封顶 · 先赢 3 个单项获胜</div>
+          </div>
+          <!-- 步骤5：访问控制 -->
+          <div class="create-step" data-step="4" style="display:none;">
+            <div class="section-title">访问控制</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 2px 12px;">
+              <div><div style="font-size:14px;font-weight:600;">启用密码保护</div><div style="font-size:12px;color:var(--text2);">未在白名单内的用户需输入密码查看比赛</div></div>
+              <div class="switch on" onclick="this.classList.toggle('on')"></div>
+            </div>
+            <div class="field"><label>比赛查看密码<span class="req">*</span></label><input class="input" value="8888" placeholder="4-8 位数字/字母"></div>
+            <div class="field"><label>拉入人员（白名单，免密查看）</label>
+              <div class="card" style="padding:10px 12px;">
+                <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #F7F8FA;">
+                  <div class="avatar" style="width:32px;height:32px;font-size:13px;">李</div><div style="flex:1;"><div style="font-size:13px;font-weight:600;">李飞</div><div style="font-size:11px;color:var(--text3);">138****2091 · 队长</div></div><span class="chip chip-green">已拉入</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #F7F8FA;">
+                  <div class="avatar" style="width:32px;height:32px;font-size:13px;">王</div><div style="flex:1;"><div style="font-size:13px;font-weight:600;">王浩然</div><div style="font-size:11px;color:var(--text3);">139****8842 · 裁判</div></div><span class="chip chip-green">已拉入</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; padding:8px 0;">
+                  <div class="avatar" style="width:32px;height:32px;font-size:13px;background:#F0F1F3;color:var(--text2);">＋</div><div style="flex:1;font-size:13px;color:var(--primary);">添加人员到白名单</div>
+                </div>
+              </div>
+            </div>
+            <div class="rule-box" style="margin:10px 0;">🔒 说明：白名单内人员可直接查看；其他用户首次访问需输入密码，输入一次后本地缓存免重复输入。修改密码后缓存失效。</div>
+          </div>
+        </div>
+        <div class="bottom-actions">
+          <button class="btn-ghost" style="width:100px;" id="createPrev" onclick="createStep(-1)">上一步</button>
+          <button class="btn-primary" id="createNext" onclick="createStep(1)">下一步</button>
+        </div>
+      </div>
+
+      <!-- ========== P4 队长报名 ========== -->
+      <div class="page" id="p-register">
+        <div class="nav"><button class="back" onclick="go('match-detail')">‹</button><span>我的队伍 · 报名</span></div>
+        <div class="pad">
+          <div class="team-head">
+            <div class="field" style="margin-bottom:10px;"><label>队名<span class="req">*</span></label><input class="input" value="飞羽俱乐部"></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
+              <div style="font-size:13px;color:var(--text2);">队员名单（9 人）</div>
+              <span style="font-size:12px;color:var(--primary);cursor:pointer;" onclick="openSheet('sheet-member')">＋ 添加队员</span>
+            </div>
+          </div>
+          <div class="card" style="margin-top:10px; padding:4px 14px;">
+            <div class="member-row"><div class="avatar">李</div><div><div style="font-size:14px;font-weight:600;">李飞</div><div style="font-size:11px;color:var(--text3);">男 · 138****2091 · 队长</div></div><div style="flex:1"></div><span class="chip chip-green">已认领</span></div>
+            <div class="member-row"><div class="avatar">王</div><div><div style="font-size:14px;font-weight:600;">王浩然</div><div style="font-size:11px;color:var(--text3);">男 · 139****8842</div></div><div style="flex:1"></div><span class="chip chip-gray">未认领</span></div>
+            <div class="member-row"><div class="avatar">张</div><div><div style="font-size:14px;font-weight:600;">张思雨</div><div style="font-size:11px;color:var(--text3);">女 · 137****5510</div></div><div style="flex:1"></div><span class="chip chip-gray">未认领</span></div>
+            <div class="member-row"><div class="avatar">刘</div><div><div style="font-size:14px;font-weight:600;">刘洋</div><div style="font-size:11px;color:var(--text3);">男 · 136****7731</div></div><div style="flex:1"></div><span class="chip chip-gray">未认领</span></div>
+          </div>
+          <div class="section-title">单项参赛名单</div>
+          <div class="item-list">
+            <div class="item-slot" onclick="toast('选择男单参赛队员（演示）')"><div class="left"><div class="n">男单</div><div class="s">需 1 人</div></div><div class="right">李飞 ›</div></div>
+            <div class="item-slot" onclick="toast('选择女单参赛队员（演示）')"><div class="left"><div class="n">女单</div><div class="s">需 1 人</div></div><div class="right">张思雨 ›</div></div>
+            <div class="item-slot" onclick="toast('选择男双参赛队员（演示）')"><div class="left"><div class="n">男双</div><div class="s">需 2 人</div></div><div class="right">王浩然、刘洋 ›</div></div>
+            <div class="item-slot" onclick="toast('选择女双参赛队员（演示）')"><div class="left"><div class="n">女双</div><div class="s">需 2 人</div></div><div class="right">待选择 ›</div></div>
+            <div class="item-slot" onclick="toast('选择混双参赛队员（演示）')"><div class="left"><div class="n">混双</div><div class="s">需 2 人</div></div><div class="right">待选择 ›</div></div>
+          </div>
+          <div style="margin-top:14px; display:flex; gap:10px;">
+            <button class="btn-ghost" onclick="toast('已保存草稿')">存草稿</button>
+            <button class="btn-primary" onclick="toast('报名已提交，等待管理员审核'); go('home')">提交报名</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== P5 对阵表 ========== -->
+      <div class="page" id="p-fixture">
+        <div class="nav"><button class="back" onclick="go('home')">‹</button><span>对阵表</span><button class="right" onclick="toast('已复制对阵链接')">分享</button></div>
+        <div class="pad">
+          <div class="card" style="padding:14px; margin-bottom:10px; cursor:pointer;" onclick="toggleMatchPicker('fixturePicker')">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:2px;">当前比赛</div>
+                <div style="font-size:15px; font-weight:700;" id="fixtureMatchName">2026 羽协夏季团体赛</div>
+              </div>
+              <span style="font-size:12px;color:var(--primary);">切换 ›</span>
+            </div>
+          </div>
+          <div id="fixturePicker" style="display:none; padding:8px 0; margin-bottom:10px;" class="card">
+            <div class="match-pick-item" onclick="pickMatch('fixture','2026 羽协夏季团体赛')" style="padding:10px 14px; border-bottom:1px solid #F7F8FA; font-size:13px; cursor:pointer;"><span class="chip chip-green" style="margin-right:8px;">进行中</span>2026 羽协夏季团体赛</div>
+            <div class="match-pick-item" onclick="pickMatch('fixture','2025 羽协秋季邀请赛')" style="padding:10px 14px; border-bottom:1px solid #F7F8FA; font-size:13px; cursor:pointer;"><span class="chip chip-gray" style="margin-right:8px;">已结束</span>2025 羽协秋季邀请赛</div>
+            <div class="match-pick-item" onclick="pickMatch('fixture','2025 城东俱乐部友谊赛')" style="padding:10px 14px; font-size:13px; cursor:pointer;"><span class="chip chip-gray" style="margin-right:8px;">已结束</span>2025 城东俱乐部友谊赛</div>
+          </div>
+          <div class="card" style="padding:14px; margin-bottom:10px;">
+            <div class="seg" id="fixtureSeg">
+              <div class="seg-item active" onclick="switchSeg(this,'f-group')">小组循环</div>
+              <div class="seg-item" onclick="switchSeg(this,'f-knockout')">淘汰赛</div>
+              <div class="seg-item" onclick="switchSeg(this,'f-round')">轮次表</div>
+            </div>
+          </div>
+
+          <!-- 小组循环视图 -->
+          <div id="f-group">
+            <div class="card" style="overflow:hidden; margin-bottom:10px;">
+              <div style="padding:12px 14px 4px; font-weight:600; font-size:14px;">A 组 <span style="font-size:11px;color:var(--text3);font-weight:400;">· 已赛 1 轮</span></div>
+              <table class="mini">
+                <tr><th>队伍</th><th>胜</th><th>负</th><th>积分</th></tr>
+                <tr><td class="name">飞羽俱乐部</td><td>1</td><td>0</td><td style="color:var(--primary);font-weight:700;">2</td></tr>
+                <tr><td class="name">迅捷羽球队</td><td>1</td><td>0</td><td style="color:var(--primary);font-weight:700;">2</td></tr>
+                <tr><td class="name">晨光俱乐部</td><td>0</td><td>1</td><td>1</td></tr>
+                <tr><td class="name">羽动青春队</td><td>0</td><td>1</td><td>1</td></tr>
+              </table>
+            </div>
+            <div class="fixture-card" onclick="go('fixture-detail')">
+              <div class="vs">
+                <span class="team">飞羽俱乐部</span>
+                <span class="score">3 : 1</span>
+                <span class="team r">迅捷羽球队</span>
+              </div>
+              <div class="info"><span>A1 · 场地 1</span><span>08.22 09:30</span><span class="chip chip-green">已完赛</span></div>
+            </div>
+            <div class="fixture-card" onclick="go('fixture-detail')">
+              <div class="vs">
+                <span class="team">晨光俱乐部</span>
+                <span class="score">—</span>
+                <span class="team r">羽动青春队</span>
+              </div>
+              <div class="info"><span>A2 · 场地 2</span><span>08.22 10:30</span><span class="chip chip-orange">今日进行</span></div>
+            </div>
+            <div class="fixture-card" onclick="go('fixture-detail')">
+              <div class="vs">
+                <span class="team">飞羽俱乐部</span>
+                <span class="score">—</span>
+                <span class="team r">晨光俱乐部</span>
+              </div>
+              <div class="info"><span>A3 · 场地 1</span><span>08.22 14:00</span><span class="chip chip-gray">未开始</span></div>
+            </div>
+          </div>
+
+          <!-- 淘汰赛视图 -->
+          <div id="f-knockout" style="display:none;">
+            <div class="card" style="padding:12px; margin-bottom:8px;">
+              <div style="font-size:13px;font-weight:600;margin-bottom:10px;">🏆 淘汰赛（八强）</div>
+              <div class="bracket">
+                <div class="bracket-col">
+                  <div class="b-node win"><div class="tn">飞羽俱乐部</div><div>3:1</div></div>
+                  <div class="b-node"><div class="tn">晨光俱乐部</div><div>—</div></div>
+                </div>
+                <div class="bracket-col">
+                  <div class="b-node win"><div class="tn">体育中心队</div><div>3:2</div></div>
+                  <div class="b-node"><div class="tn">羽动青春队</div><div>—</div></div>
+                </div>
+                <div class="bracket-col">
+                  <div class="b-node"><div class="tn">半决赛 1</div><div>08.23 14:00</div></div>
+                  <div class="b-node"><div class="tn">半决赛 2</div><div>08.23 14:00</div></div>
+                </div>
+                <div class="bracket-col">
+                  <div class="b-node" style="border:1.5px solid var(--yellow);"><div class="tn" style="color:#B87700;">决赛</div><div>08.23 16:00</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 轮次表视图 -->
+          <div id="f-round" style="display:none;">
+            <div class="card" style="overflow:hidden; margin-bottom:8px;">
+              <div style="padding:12px 14px 4px; font-weight:600; font-size:14px;">第 2 轮 <span style="font-size:11px;color:var(--text3);font-weight:400;">· 单循环 · 共 3 轮</span></div>
+              <div class="fixture-card" style="box-shadow:none; margin-bottom:0;" onclick="go('fixture-detail')">
+                <div class="vs"><span class="team">飞羽俱乐部</span><span class="score">—</span><span class="team r">晨光俱乐部</span></div>
+                <div class="info"><span>场地 1</span><span>08.22 14:00</span><span class="chip chip-gray">未开始</span></div>
+              </div>
+              <div class="fixture-card" style="box-shadow:none; margin-bottom:0;" onclick="go('fixture-detail')">
+                <div class="vs"><span class="team">迅捷羽球队</span><span class="score">—</span><span class="team r">羽动青春队</span></div>
+                <div class="info"><span>场地 2</span><span>08.22 14:00</span><span class="chip chip-gray">未开始</span></div>
+              </div>
+              <div style="padding:10px 14px; font-size:12px; color:var(--text3);">已赛 1 轮 · 剩余 2 轮</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== P6 单场对阵详情 ========== -->
+      <div class="page" id="p-fixture-detail">
+        <div class="nav"><button class="back" onclick="go('fixture')">‹</button><span>团体对阵详情</span><button class="right" onclick="go('score')">⚡记分</button></div>
+        <div class="card" style="margin:12px 14px 0; padding:16px;">
+          <div class="vs" style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="text-align:center; flex:1;"><div class="avatar" style="width:44px;height:44px;font-size:18px;margin:0 auto;">飞</div><div style="font-size:13px;font-weight:600;margin-top:6px;">飞羽俱乐部</div></div>
+            <div style="text-align:center;"><div style="font-size:34px;font-weight:800;color:var(--primary);">3 : 1</div><div style="font-size:11px;color:var(--text3);">团体赛 · 已完赛</div></div>
+            <div style="text-align:center; flex:1;"><div class="avatar" style="width:44px;height:44px;font-size:18px;margin:0 auto;">迅</div><div style="font-size:13px;font-weight:600;margin-top:6px;">迅捷羽球队</div></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text3); margin-top:12px; padding-top:10px; border-top:1px dashed var(--line);">
+            <span>A1 · 场地 1</span><span>08.22 09:30</span><span>裁判：陈明、周芳</span>
+          </div>
+        </div>
+        <div class="section-title" style="padding:0 14px;">单项场次 <span style="font-size:11px;color:var(--text3);font-weight:400;">先赢 3 项获胜</span></div>
+        <div class="pad" style="padding-top:0;">
+          <div class="item-slot" onclick="toast('单项详情（演示）')">
+            <div class="left"><div class="n">男单</div><div class="s">李飞 vs 赵迅</div></div>
+            <div class="right"><span style="color:var(--primary);font-weight:700;font-size:14px;">2:0</span> <span style="margin-left:6px;font-size:12px;color:var(--text3);">21:15 · 21:18</span></div>
+          </div>
+          <div class="item-slot" onclick="toast('单项详情（演示）')">
+            <div class="left"><div class="n">女单</div><div class="s">张思雨 vs 孙悦</div></div>
+            <div class="right"><span style="color:var(--text3);font-weight:700;font-size:14px;">0:2</span> <span style="margin-left:6px;font-size:12px;color:var(--text3);">18:21 · 16:21</span></div>
+          </div>
+          <div class="item-slot" onclick="toast('单项详情（演示）')">
+            <div class="left"><div class="n">男双</div><div class="s">王浩然/刘洋 vs 钱程/吴迪</div></div>
+            <div class="right"><span style="color:var(--primary);font-weight:700;font-size:14px;">2:1</span> <span style="margin-left:6px;font-size:12px;color:var(--text3);">21:19 · 17:21 · 21:14</span></div>
+          </div>
+          <div class="item-slot" style="border:1.5px solid var(--primary-line);" onclick="go('score')">
+            <div class="left"><div class="n">女双 <span class="chip chip-orange" style="margin-left:4px;">进行中</span></div><div class="s">待定 vs 待定</div></div>
+            <div class="right" style="color:var(--primary);font-weight:600;">去记分 ›</div>
+          </div>
+          <div class="item-slot" onclick="toast('未开始')">
+            <div class="left"><div class="n">混双</div><div class="s">待定 vs 待定</div></div>
+            <div class="right" style="font-size:12px;color:var(--text3);">未开始</div>
+          </div>
+        </div>
+        <div style="margin:14px;">
+          <button class="btn-primary" onclick="go('score')">⚡ 开始记分（裁判）</button>
+        </div>
+      </div>
+
+      <!-- ========== P7 裁判记分 ========== -->
+      <div class="page" id="p-score">
+        <div class="nav nav-dark" style="background:linear-gradient(135deg,#00B87A,#006B48);"><button class="back" onclick="go('fixture-detail')">‹</button><span>裁判记分</span><button class="right" style="color:#fff;" onclick="undoScore()">↩ 撤销</button></div>
+        <div class="score-header">
+          <div class="setinfo">女双 · 场地 1 · 裁判：陈明 &nbsp;·&nbsp; 第 <span id="curSet">2</span> 局</div>
+          <div class="teams">
+            <span class="tn">飞羽<br>俱乐部</span>
+            <span class="cs"><span id="setA">1</span><span style="opacity:.5;font-size:20px;">:</span><span id="setB">0</span></span>
+            <span class="tn" style="text-align:right;">迅捷<br>羽球队</span>
+          </div>
+        </div>
+        <div class="notice live">🔄 比分已实时同步 · 观赛端可见</div>
+        <div class="score-board">
+          <div class="cur-label" id="curLabel">当前局 · 每球得分制（20 平后净胜 2 分，30 分封顶）</div>
+          <div class="score-nums">
+            <div class="num a" id="numA">18</div>
+            <div class="colon">:</div>
+            <div class="num b" id="numB">15</div>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:11px; color:var(--text3);">
+            <span>飞羽俱乐部</span><span>迅捷羽球队</span>
+          </div>
+        </div>
+        <div class="notice" id="deuceNotice" style="display:none;">⚖️ 平分！需净胜 2 分，先到 30 分者获胜</div>
+        <div class="notice" id="gamePointNotice" style="display:none;">🎯 局点 / 赛点！</div>
+        <div class="btn-col">
+          <div class="side">
+            <button class="plus-btn plus-a" onclick="addPoint('a')">＋1</button>
+            <button class="btn-ghost" style="height:44px;font-size:13px;" onclick="toast('已请求换边（演示）')">🔃 换边</button>
+          </div>
+          <div class="side">
+            <button class="plus-btn plus-b" onclick="addPoint('b')">＋1</button>
+            <button class="btn-danger" style="height:44px;font-size:13px;" onclick="endSet()">本局结束</button>
+          </div>
+        </div>
+        <div class="card" style="margin:0 14px; padding:10px 14px;">
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">本场比分记录</div>
+          <div style="font-size:12px;color:var(--text2); line-height:1.9;" id="setHistory">第 1 局：21 : 15（飞羽胜）<br>第 2 局：进行中…</div>
+        </div>
+        <div style="margin:14px;">
+          <button class="btn-primary" style="background:var(--accent);" onclick="confirmFinish()">🏁 确认完赛 · 生成赛果</button>
+        </div>
+      </div>
+
+      <!-- ========== P8 赛果 ========== -->
+      <div class="page" id="p-result">
+        <div class="nav"><button class="back" onclick="go('home')">‹</button><span>赛果</span></div>
+        <div class="pad">
+          <div class="card" style="padding:14px; margin-bottom:10px; cursor:pointer;" onclick="toggleMatchPicker('resultPicker')">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:2px;">当前比赛</div>
+                <div style="font-size:15px; font-weight:700;" id="resultMatchName">2026 羽协夏季团体赛</div>
+              </div>
+              <span style="font-size:12px;color:var(--primary);">切换 ›</span>
+            </div>
+          </div>
+          <div id="resultPicker" style="display:none; padding:8px 0; margin-bottom:10px;" class="card">
+            <div class="match-pick-item" onclick="pickMatch('result','2026 羽协夏季团体赛')" style="padding:10px 14px; border-bottom:1px solid #F7F8FA; font-size:13px; cursor:pointer;"><span class="chip chip-green" style="margin-right:8px;">已完赛</span>2026 羽协夏季团体赛</div>
+            <div class="match-pick-item" onclick="pickMatch('result','2025 羽协秋季邀请赛')" style="padding:10px 14px; border-bottom:1px solid #F7F8FA; font-size:13px; cursor:pointer;"><span class="chip chip-gray" style="margin-right:8px;">已结束</span>2025 羽协秋季邀请赛</div>
+            <div class="match-pick-item" onclick="pickMatch('result','2025 城东俱乐部友谊赛')" style="padding:10px 14px; font-size:13px; cursor:pointer;"><span class="chip chip-gray" style="margin-right:8px;">已结束</span>2025 城东俱乐部友谊赛</div>
+          </div>
+          <div class="champion">
+            <div class="t1">🥇 2026 羽协夏季团体赛 · 冠军</div>
+            <div class="t2">飞羽俱乐部</div>
+            <div class="t3">团体决赛 3 : 2 战胜 体育中心队 · 08.23</div>
+          </div>
+          <div class="section-title">团体赛积分榜 <span class="more" onclick="toast('按胜场/净胜局排序')">排名规则 ›</span></div>
+          <div class="card" style="overflow:hidden;">
+            <div class="rank-row"><div class="rk g">1</div><div class="nm">飞羽俱乐部</div><div style="font-size:12px;color:var(--text3);margin-right:12px;">胜 5 负 0</div><div class="pts">10</div></div>
+            <div class="rank-row"><div class="rk g">2</div><div class="nm">体育中心队</div><div style="font-size:12px;color:var(--text3);margin-right:12px;">胜 4 负 1</div><div class="pts">9</div></div>
+            <div class="rank-row"><div class="rk s">3</div><div class="nm">迅捷羽球队</div><div style="font-size:12px;color:var(--text3);margin-right:12px;">胜 3 负 2</div><div class="pts">8</div></div>
+            <div class="rank-row"><div class="rk s">4</div><div class="nm">晨光俱乐部</div><div style="font-size:12px;color:var(--text3);margin-right:12px;">胜 2 负 3</div><div class="pts">7</div></div>
+            <div class="rank-row"><div class="rk">5</div><div class="nm">羽动青春队</div><div style="font-size:12px;color:var(--text3);margin-right:12px;">胜 1 负 4</div><div class="pts">6</div></div>
+            <div class="rank-row"><div class="rk">6</div><div class="nm">羽你同行队</div><div style="font-size:12px;color:var(--text3);margin-right:12px;">胜 0 负 5</div><div class="pts">5</div></div>
+          </div>
+          <div class="section-title">最新赛果</div>
+          <div class="fixture-card" onclick="go('fixture-detail')">
+            <div class="vs"><span class="team">飞羽俱乐部</span><span class="score">3 : 2</span><span class="team r">体育中心队</span></div>
+            <div class="info"><span>决赛 · 场地 1</span><span>08.23 16:00</span><span class="chip chip-green">已完赛</span></div>
+          </div>
+          <div class="fixture-card" onclick="toast('赛果详情（演示）')">
+            <div class="vs"><span class="team">迅捷羽球队</span><span class="score">3 : 0</span><span class="team r">羽你同行队</span></div>
+            <div class="info"><span>季军赛 · 场地 2</span><span>08.23 14:30</span><span class="chip chip-green">已完赛</span></div>
+          </div>
+          <button class="btn-ghost" style="margin-top:6px;" onclick="toast('更多历史赛果（演示）')">查看完整赛程与比分明细</button>
+        </div>
+      </div>
+
+      <!-- ========== P9 照片墙 ========== -->
+      <div class="page" id="p-photo">
+        <div class="nav"><button class="back" onclick="go('match-detail')">‹</button><span>比赛照片</span><button class="right" onclick="toast('共 126 张')">126 张</button></div>
+        <div style="padding:12px 14px 0; font-size:13px; color:var(--text2);">🏸 2026 羽协夏季团体赛 · 全场回顾（全员可上传）</div>
+        <div class="photo-grid" style="padding:10px 14px;">
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#B8E7D0,#5BC8A0);">🏸</div><div class="tag">开球仪式</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#FFE2C8,#FFB37E);">🥇</div><div class="tag">颁奖</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#CDE3FF,#7FB5FF);">⚔️</div><div class="tag">男单决赛</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#E8D8FF,#B79CFF);">🏸</div><div class="tag">混双</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#FFE8D6,#FFB38F);">📸</div><div class="tag">合影</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#D3F5E4,#7FDCAF);">🏆</div><div class="tag">冠军</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#FFF3C4,#FFD666);">🎉</div><div class="tag">庆祝</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#E4F0FF,#9CC7FF);">👥</div><div class="tag">观众</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#FFD6E2,#FF9EBF);">🤝</div><div class="tag">握手</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#D8F5DE,#8FDCA6);">🏸</div><div class="tag">比赛瞬间</div></div>
+          <div class="ph"><div class="bg" style="background:linear-gradient(135deg,#EFEFEF,#C9CDD3);">🏟️</div><div class="tag">场馆</div></div>
+          <div class="upload-box" onclick="toast('打开相册选择照片（演示）')"><span style="font-size:26px;">＋</span><span>上传照片</span></div>
+        </div>
+        <div class="footnote">上传即代表您同意照片用于比赛公开展示 · 管理员可删除不当内容</div>
+      </div>
+
+      <!-- ========== P10 我的 ========== -->
+      <div class="page" id="p-mine">
+        <div class="nav"><span>我的</span></div>
+        <div class="hero" style="border-radius:0 0 20px 20px;">
+          <div class="hero-top">
+            <div class="row">
+              <div class="hero-avatar" style="width:52px;height:52px;font-size:24px;margin-right:12px;">👤</div>
+              <div>
+                <div class="name">林教练</div>
+                <div style="font-size:11px;opacity:.85;margin-top:2px;">138****2091 · 已实名</div>
+              </div>
+            </div>
+            <div style="font-size:11px;opacity:.8;">编辑资料</div>
+          </div>
+          <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
+            <span style="background:rgba(255,255,255,.25); border-radius:6px; padding:3px 9px; font-size:11px;">超级管理员</span>
+            <span style="background:rgba(255,255,255,.25); border-radius:6px; padding:3px 9px; font-size:11px;">队长</span>
+            <span style="background:rgba(255,255,255,.25); border-radius:6px; padding:3px 9px; font-size:11px;">裁判</span>
+            <span style="background:rgba(255,255,255,.25); border-radius:6px; padding:3px 9px; font-size:11px;">队员</span>
+          </div>
+        </div>
+        <div class="pad">
+          <div class="section-title">角色模拟 <span style="font-size:11px;color:var(--text3);font-weight:400;">切换查看不同身份的功能入口</span></div>
+          <div class="role-switch">
+            <span class="role-btn on" data-r="超级管理员" onclick="switchRole(this)">🛡️ 超级管理员</span>
+            <span class="role-btn" data-r="管理员" onclick="switchRole(this)">📋 管理员</span>
+            <span class="role-btn" data-r="队长" onclick="switchRole(this)">🚩 队长</span>
+            <span class="role-btn" data-r="裁判" onclick="switchRole(this)">⚡ 裁判</span>
+            <span class="role-btn" data-r="队员" onclick="switchRole(this)">🏸 队员</span>
+          </div>
+          <div class="section-title">常用功能</div>
+          <div class="menu-list">
+            <div class="menu-item" onclick="toast('我的比赛列表（演示）')"><div class="mi" style="background:var(--primary-light);">🏸</div><div class="lt">我报名的比赛</div><div class="rs">2 ›</div></div>
+            <div class="menu-item" onclick="toast('我执裁的场次（演示）'); go('score')"><div class="mi" style="background:var(--accent-light);">⚡</div><div class="lt">我执裁的场次</div><div class="rs">3 ›</div></div>
+            <div class="menu-item" onclick="toast('我的队伍：飞羽俱乐部')"><div class="mi" style="background:#EEF2FF;">🚩</div><div class="lt">我的队伍</div><div class="rs">飞羽俱乐部 ›</div></div>
+            <div class="menu-item" onclick="go('photo')"><div class="mi" style="background:#FDF2E3;">📷</div><div class="lt">我上传的照片</div><div class="rs">12 ›</div></div>
+            <div class="menu-item" onclick="go('role-apply')"><div class="mi" style="background:#E8F5E9;">📝</div><div class="lt">角色申请</div><div class="rs">申请裁判/队长/队员 ›</div></div>
+            <div class="menu-item" onclick="go('create')"><div class="mi" style="background:#F0EFFF;">🛡️</div><div class="lt">创建比赛（管理）</div><div class="rs">›</div></div>
+            <div class="menu-item" onclick="toast('管理员账号管理（演示）')"><div class="mi" style="background:#FDE9E9;">👨‍💼</div><div class="lt">管理员 / 裁判管理（超管）</div><div class="rs">›</div></div>
+            <div class="menu-item" onclick="toast('比赛设置（演示）')"><div class="mi" style="background:#F0F1F3;">⚙️</div><div class="lt">设置</div><div class="rs">›</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== P11 角色申请 ========== -->
+      <div class="page" id="p-role-apply">
+        <div class="nav"><button class="back" onclick="go('mine')">‹</button><span>角色申请</span></div>
+        <div class="pad">
+          <div class="card" style="padding:14px; margin-bottom:12px;">
+            <div style="font-size:13px; color:var(--text2); line-height:1.6;">
+              您当前身份：<span style="color:var(--primary);font-weight:600;">普通队员</span><br>
+              可申请以下角色，管理员审核通过后生效。每位用户可同时持有多个角色。
+            </div>
+          </div>
+
+          <div class="section-title">选择申请角色</div>
+          <div class="option-card selected" onclick="pickRoleApply(this,'裁判')">
+            <div class="t">⚡ 裁判</div>
+            <div class="d">可执裁比赛场次、实时记分、确认赛果</div>
+          </div>
+          <div class="option-card" onclick="pickRoleApply(this,'队长')">
+            <div class="t">🚩 队长</div>
+            <div class="d">可创建队伍、报名参赛、填报单项名单</div>
+          </div>
+          <div class="option-card" onclick="pickRoleApply(this,'队员')">
+            <div class="t">🏸 队员</div>
+            <div class="d">可加入队伍、查看对阵与赛果、上传照片</div>
+          </div>
+
+          <div class="field" style="margin-top:14px;">
+            <label>申请理由 / 相关资质<span class="req">*</span></label>
+            <textarea class="textarea" id="roleApplyReason" placeholder="如：持有国家二级裁判证书，曾执裁 2025 市运会羽毛球赛…" style="min-height:80px;"></textarea>
+          </div>
+
+          <div class="field">
+            <label>联系方式（选填）</label>
+            <input class="input" placeholder="便于管理员联系确认">
+          </div>
+
+          <div class="card" style="padding:12px 14px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:8px;">📋 我的申请记录</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid #F7F8FA;">
+              <div><span style="font-size:13px;font-weight:600;">裁判</span> <span class="chip chip-orange" style="margin-left:6px;">审核中</span></div>
+              <span style="font-size:11px;color:var(--text3);">08.16 提交</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0;">
+              <div><span style="font-size:13px;font-weight:600;">队长</span> <span class="chip chip-green" style="margin-left:6px;">已通过</span></div>
+              <span style="font-size:11px;color:var(--text3);">08.10 通过</span>
+            </div>
+          </div>
+
+          <button class="btn-primary" style="width:100%;" onclick="toast('申请已提交，等待管理员审核 ✅')">提交申请</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TabBar -->
+    <div class="tab-bar" id="tabBar">
+      <div class="tab active" data-t="home" onclick="go('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+        <span>首页</span>
+      </div>
+      <div class="tab" data-t="fixture" onclick="go('fixture')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v12M6 12h12"/><circle cx="12" cy="12" r="9"/></svg>
+        <span>对阵</span>
+      </div>
+      <div class="tab" data-t="result" onclick="go('result')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M6 9v11M18 9v11M6 4h12v5H6z"/></svg>
+        <span>赛果</span>
+      </div>
+      <div class="tab" data-t="mine" onclick="go('mine')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
+        <span>我的</span>
+      </div>
+    </div>
+
+    <!-- 弹层：添加队员 -->
+    <div class="mask" id="sheet-member">
+      <div class="sheet">
+        <div class="bar"></div>
+        <h3>添加队员</h3>
+        <div class="field"><label>姓名<span class="req">*</span></label><input class="input" placeholder="请输入队员姓名"></div>
+        <div class="field"><label>性别<span class="req">*</span></label>
+          <div style="display:flex; gap:10px;">
+            <div class="option-card selected" style="flex:1; margin-bottom:0; text-align:center; padding:10px;" onclick="pickOption(this,'男')">男</div>
+            <div class="option-card" style="flex:1; margin-bottom:0; text-align:center; padding:10px;" onclick="pickOption(this,'女')">女</div>
+          </div>
+        </div>
+        <div class="field"><label>手机号<span class="req">*</span></label><input class="input" placeholder="用于邀请队员认领微信账号"></div>
+        <div style="display:flex; gap:10px; margin-top:16px;">
+          <button class="btn-ghost" onclick="hideSheet('sheet-member')">取消</button>
+          <button class="btn-primary" onclick="toast('队员已添加（演示）'); hideSheet('sheet-member')">确认添加</button>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+
+<script>
+var screen = document.getElementById('screen');
+var TABS = ['home','fixture','result','mine'];
+var pageDesc = {
+  'home':'💡 当前页面：比赛列表（首页）<h3>全部角色的统一入口。顶部展示进行中/未开始/已结束比赛，支持搜索；底部统计卡直达"我的比赛""我执裁的场次"。点击比赛卡片进入比赛详情。</h3>',
+  'match-detail':'💡 当前页面：比赛详情<h3>汇聚比赛全貌：基本信息、赛制标签、快捷入口（对阵/报名/赛果/照片），并支持"概况 / 赛程 / 赛制规则 / 队伍"四个视图切换。管理员可在此生成对阵、指派裁判。</h3>',
+  'create':'💡 当前页面：创建比赛（管理员）<h3>五步表单：基本信息 → 赛制晋级方式 → 比赛项目（含团体胜负模式选择）→ 记分规则 → 访问控制。支持拉入白名单免密查看或密码保护，团体赛可选"先赢 N 项"或"打满全部单项"模式。</h3>',
+  'register':'💡 当前页面：队长报名<h3>队长维护队名与队员名单（可邀请认领微信账号），并为每个单项填报参赛名单，最后提交管理员审核。</h3>',
+  'fixture':'💡 当前页面：对阵表<h3>先选择比赛 → 再查看对阵数据。同一对阵表支持三种视图：小组循环积分表、淘汰赛树状图、单循环轮次表。点击任意一场进入团体对阵详情。</h3>',
+  'fixture-detail':'💡 当前页面：团体对阵详情<h3>展示双方队伍、团体比分（先赢 3 项获胜）及 5 个单项场次的逐项比分与状态。裁判点击"开始记分"进入记分台。</h3>',
+  'score':'💡 当前页面：裁判记分（核心）<h3>实时记分台：大号比分、加减分防误触、局点/平分自动提示、换边与撤销。点击"确认完赛"自动生成赛果。</h3>',
+  'result':'💡 当前页面：赛果与排行榜<h3>先选择比赛 → 再查看赛果。展示该比赛的冠军、积分榜（胜场积分制）、最新赛果列表，队员可查看本队成绩与历史战绩。</h3>',
+  'photo':'💡 当前页面：照片墙<h3>全员可上传比赛照片，按比赛聚合九宫格展示，支持大图预览；管理员可删除/置顶。</h3>',
+  'mine':'💡 当前页面：我的（个人中心）<h3>显示角色集合，支持切换角色模拟不同身份入口；聚合我的比赛、执裁场次、队伍、照片、角色申请及管理功能。</h3>',
+  'role-apply':'💡 当前页面：角色申请<h3>用户可在此申请裁判、队长或队员角色，填写申请理由/资质后提交，管理员在"角色审核"中审批通过后生效。</h3>'
+};
+function desc(id){ var box=document.getElementById('descCard'); if(pageDesc[id]) box.innerHTML=pageDesc[id]; }
+function go(id){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  var page=document.getElementById('p-'+id);
+  if(page) page.classList.add('active');
+  var tabBar=document.getElementById('tabBar');
+  var isTab=TABS.indexOf(id)>-1;
+  tabBar.style.display=isTab?'flex':'none';
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active', t.dataset.t===id);});
+  screen.scrollTop=0;
+  desc(id);
+}
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._tm); t._tm=setTimeout(function(){t.classList.remove('show');},1800);
+}
+function openSheet(id){ document.getElementById(id).classList.add('show'); }
+function hideSheet(id){ document.getElementById(id).classList.remove('show'); }
+function pickOption(el){ el.parentElement.querySelectorAll('.option-card').forEach(function(o){o.classList.remove('selected');}); el.classList.add('selected'); }
+function switchDetail(el,id){
+  el.parentElement.querySelectorAll('.detail-tab').forEach(function(t){t.classList.remove('active');}); el.classList.add('active');
+  ['d-overview','d-schedule','d-rules','d-teams'].forEach(function(i){document.getElementById(i).style.display=(i===id)?'block':'none';});
+}
+function switchSeg(el,id){
+  el.parentElement.querySelectorAll('.seg-item').forEach(function(t){t.classList.remove('active');}); el.classList.add('active');
+  ['f-group','f-knockout','f-round'].forEach(function(i){document.getElementById(i).style.display=(i===id)?'block':'none';});
+}
+function switchRole(el){
+  document.querySelectorAll('.role-btn').forEach(function(b){b.classList.remove('on');}); el.classList.add('on');
+  toast('已切换为「'+el.dataset.r+'」视角（演示）');
+}
+/* ---------- 创建比赛分步 ---------- */
+var curStep=0;
+function createStep(d){
+  var steps=document.querySelectorAll('.create-step');
+  curStep=Math.min(4,Math.max(0,curStep+d));
+  steps.forEach(function(s,i){ s.style.display=(i===curStep)?'block':'none'; });
+  document.querySelectorAll('#createSteps .step').forEach(function(s,i){
+    s.classList.toggle('active',i===curStep);
+    s.classList.toggle('done',i<curStep);
+  });
+  document.getElementById('createPrev').style.visibility=curStep===0?'hidden':'visible';
+  document.getElementById('createNext').textContent=curStep===4?'发布比赛':'下一步';
+}
+/* ---------- 记分逻辑 ---------- */
+var score={ setsA:1, setsB:0, curSet:1, a:18, b:15 };
+function renderScore(){
+  document.getElementById('setA').textContent=score.setsA;
+  document.getElementById('setB').textContent=score.setsB;
+  document.getElementById('curSet').textContent=score.curSet;
+  document.getElementById('numA').textContent=score.a;
+  document.getElementById('numB').textContent=score.b;
+  var deuce=document.getElementById('deuceNotice');
+  var gp=document.getElementById('gamePointNotice');
+  var total=score.a+score.b;
+  deuce.style.display=(score.a>=20&&score.b>=20)?'block':'none';
+  gp.style.display=(Math.max(score.a,score.b)>=20&&Math.abs(score.a-score.b)===1)?'block':'none';
+  var hist=document.getElementById('setHistory');
+  if(score.curSet===2) hist.innerHTML='第 1 局：21 : 15（飞羽胜）<br>第 2 局：'+score.a+' : '+score.b+'（进行中…）';
+}
+function addPoint(side){
+  if(score.setsA===2||score.setsB===2){ toast('本场比赛已结束'); return; }
+  if(side==='a') score.a++; else score.b++;
+  renderScore();
+}
+function endSet(){
+  if(score.setsA===2||score.setsB===2){ toast('比赛已结束，请确认完赛'); return; }
+  var a=score.a,b=score.b;
+  if((a>=21&&a-b>=2)||(b>=21&&b-a>=2)||a===30||b===30){
+    if(a>b){ score.setsA++; toast('本局结束 · 飞羽俱乐部胜'); }
+    else { score.setsB++; toast('本局结束 · 迅捷羽球队胜'); }
+    if(score.setsA===2||score.setsB===2){
+      toast(score.setsA===2?'🏆 比赛结束：飞羽俱乐部获胜':'🏆 比赛结束：迅捷羽球队获胜');
+      document.getElementById('curLabel').textContent='比赛已结束 · 请点击"确认完赛"生成赛果';
+      score.curSet=score.setsA===2?score.setsA+1:score.setsB+1;
+    } else {
+      score.curSet++; score.a=0; score.b=0;
+    }
+    renderScore();
+  } else {
+    toast('当前比分未达到结束条件（需净胜 2 分或 30 分封顶）');
+  }
+}
+function undoScore(){ if(score.curSet===1&&score.a===18&&score.b===15){ toast('暂无上一步记录'); return; } toast('已撤销上一步（演示）'); }
+function confirmFinish(){ toast('赛果已生成并同步排行榜 🏆'); go('result'); }
+/* ---------- 比赛选择器 ---------- */
+function toggleMatchPicker(id){
+  var el=document.getElementById(id);
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+function pickMatch(page,name){
+  document.getElementById(page+'MatchName').textContent=name;
+  document.getElementById(page+'Picker').style.display='none';
+  toast('已切换到：'+name);
+}
+/* ---------- 角色申请 ---------- */
+function pickRoleApply(card,role){
+  document.querySelectorAll('#p-role-apply .option-card').forEach(function(c){c.classList.remove('selected');});
+  card.classList.add('selected');
+}
+/* 初始化 */
+document.getElementById('createPrev').style.visibility='hidden';
+renderScore();
+desc('home');
+</script>
+</body>
+</html>
