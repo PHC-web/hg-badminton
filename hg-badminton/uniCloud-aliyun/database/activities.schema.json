@@ -1,0 +1,28 @@
+{
+  "bsonType": "object",
+  "required": ["name", "status"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": { "description": "活动 ID" },
+    "name": { "bsonType": "string", "description": "活动名称" },
+    "location": { "bsonType": "string" },
+    "startTime": { "description": "活动开始时间 ISO" },
+    "endTime": { "description": "活动结束时间 ISO" },
+    "registerStart": {},
+    "registerEnd": {},
+    "maxCount": { "bsonType": "int", "description": "报名人数上限" },
+    "allowGroupIds": { "bsonType": "array", "description": "可报名组别" },
+    "notice": { "bsonType": "string" },
+    "status": { "bsonType": "string", "description": "draft / open / closed / finished" },
+    "creatorId": { "bsonType": "string" },
+    "createdAt": {},
+    "deleted": { "bsonType": "bool", "description": "软删除标记" },
+    "deletedAt": { "description": "软删除时间 ISO" }
+  }
+}

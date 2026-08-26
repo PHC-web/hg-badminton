@@ -1,0 +1,16 @@
+{
+  "name": "hg-base",
+  "version": "1.0.0",
+  "description": "基础数据：登录、用户、角色、通知",
+  "main": "index.js",
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 30,
+    "runtime": "Nodejs18"
+  },
+  "dependencies": {
+    "hg-core": "file:../common/hg-core",
+    "hg-config": "file:../common/hg-config",
+    "hg-shared": "file:../common/hg-shared"
+  }
+}

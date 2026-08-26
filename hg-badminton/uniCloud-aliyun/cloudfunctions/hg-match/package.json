@@ -1,0 +1,15 @@
+{
+  "name": "hg-match",
+  "version": "1.0.0",
+  "description": "比赛业务：报名、对阵、记分、赛果",
+  "main": "index.js",
+  "cloudfunction-config": {
+    "memorySize": 512,
+    "timeout": 60,
+    "runtime": "Nodejs18"
+  },
+  "dependencies": {
+    "hg-core": "file:../common/hg-core",
+    "hg-shared": "file:../common/hg-shared"
+  }
+}

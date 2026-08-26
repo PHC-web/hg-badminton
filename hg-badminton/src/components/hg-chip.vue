@@ -25,14 +25,14 @@ defineProps({
 }
 .chip-orange {
   background: $hg-accent-light;
-  color: #D75A1A;
+  color: $hg-accent-dark;
 }
 .chip-red {
-  background: #FDECEC;
-  color: #C73E44;
+  background: $hg-lose-light;
+  color: $hg-lose;
 }
 .chip-gray {
-  background: #F0F1F3;
+  background: #EEF1F4;
   color: $hg-text3;
 }
 </style>

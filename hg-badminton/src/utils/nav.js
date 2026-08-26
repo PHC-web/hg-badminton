@@ -1,28 +1,36 @@
-import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { toast } from '@/utils/format'
 
-export async function openMatch(id, fallback = 'detail') {
-  try {
-    const m = await api.getMatch(id)
-    if (m.access && m.access.needPassword) {
-      uni.navigateTo({ url: `/pages/match/password?id=${id}&to=${fallback}` })
-      return
-    }
-    if (fallback === 'result') {
-      uni.switchTab({ url: '/pages/result/index' })
-      return
-    }
-    uni.navigateTo({ url: `/pages/match/detail?id=${id}` })
-  } catch (e) {
-    toast(e.message || '无法打开比赛')
-  }
+export function openMatch(id) {
+  uni.navigateTo({ url: `/pages/match/detail?id=${id}` })
 }
 
-export function requireLogin() {
+/** 需要真实登录（游客不可） */
+export function requireLogin(message = '登录后即可使用该功能') {
   const user = useUserStore()
   if (!user.loggedIn) {
+    toast(message)
     uni.navigateTo({ url: '/pages/login/index' })
+    return false
+  }
+  if (user.needProfile || user.needApproval) {
+    toast(user.needApproval ? '请等待管理员审核' : '请先完善资料')
+    uni.reLaunch({ url: '/pages/login/index' })
+    return false
+  }
+  return true
+}
+
+/** Tab / 主流程：游客可浏览；正式用户须资料齐全且已审核 */
+export function guardAppAccess() {
+  const user = useUserStore()
+  if (!user.hasSession) {
+    uni.reLaunch({ url: '/pages/login/index' })
+    return false
+  }
+  if (user.isGuest) return true
+  if (user.needProfile || user.needApproval) {
+    uni.reLaunch({ url: '/pages/login/index' })
     return false
   }
   return true

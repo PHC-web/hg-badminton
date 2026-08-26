@@ -1,4 +1,14 @@
-import { MATCH_STATUS, TEAM_STATUS, FIXTURE_STATUS, APPLY_STATUS, ROLES } from './constants'
+import {
+  MATCH_STATUS,
+  ACTIVITY_STATUS,
+  REG_STATUS,
+  FIXTURE_STATUS,
+  MEMBER_STATUS,
+  SPECTATOR_STATUS,
+  ROLES,
+  SUPER_ASSIGNABLE,
+  ADMIN_ASSIGNABLE
+} from './constants'
 
 export function nid(prefix = '') {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -43,16 +53,24 @@ export function matchStatus(s) {
   return statusMeta(MATCH_STATUS, s)
 }
 
-export function teamStatus(s) {
-  return statusMeta(TEAM_STATUS, s)
+export function activityStatus(s) {
+  return statusMeta(ACTIVITY_STATUS, s)
+}
+
+export function regStatus(s) {
+  return statusMeta(REG_STATUS, s)
 }
 
 export function fixtureStatus(s) {
   return statusMeta(FIXTURE_STATUS, s)
 }
 
-export function applyStatus(s) {
-  return statusMeta(APPLY_STATUS, s)
+export function memberStatus(s) {
+  return statusMeta(MEMBER_STATUS, s)
+}
+
+export function spectatorStatus(s) {
+  return statusMeta(SPECTATOR_STATUS, s)
 }
 
 export function roleLabel(key) {
@@ -75,8 +93,7 @@ export function confirm(content, title = '提示') {
 
 export function hasAnyRole(user, roles = []) {
   if (!user) return false
-  const list = user.viewRole ? [user.viewRole] : user.roles || []
-  return roles.some((r) => list.includes(r))
+  return roles.some((r) => (user.roles || []).includes(r))
 }
 
 export function isAdmin(user) {
@@ -87,8 +104,35 @@ export function isSuper(user) {
   return hasAnyRole(user, ['super_admin'])
 }
 
+/** 是否已通过超管审核（可进入主功能） */
+export function isUserApproved(user) {
+  if (!user || user.isGuest) return false
+  if (isSuper(user)) return true
+  if (user.approveStatus === 'approved') return true
+  // 兼容旧数据：已有姓名手机且从未进入审核流
+  if (!user.approveStatus && user.phone && user.realName) return true
+  return false
+}
+
+export function isCaptain(user) {
+  return hasAnyRole(user, ['super_admin', 'admin', 'captain'])
+}
+
+export function isReferee(user) {
+  return hasAnyRole(user, ['super_admin', 'admin', 'referee'])
+}
+
+export function assignableRoles(user) {
+  if (isSuper(user)) return SUPER_ASSIGNABLE
+  if (isAdmin(user)) return ADMIN_ASSIGNABLE
+  return []
+}
+
 export function daysUntil(ts) {
   if (!ts) return null
-  const diff = new Date(ts).getTime() - Date.now()
-  return Math.ceil(diff / 86400000)
+  return Math.ceil((new Date(ts).getTime() - Date.now()) / 86400000)
+}
+
+export function genderCount(members = [], gender) {
+  return members.filter((m) => m.status === 'active' && m.gender === gender).length
 }

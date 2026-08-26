@@ -7,5 +7,12 @@
     "update": false,
     "delete": false,
     "count": false
+  },
+  "properties": {
+    "_id": { "description": "比赛 ID" },
+    "name": { "bsonType": "string", "description": "比赛名称" },
+    "status": { "bsonType": "string", "description": "比赛状态" },
+    "deleted": { "bsonType": "bool", "description": "软删除标记" },
+    "deletedAt": { "description": "软删除时间 ISO" }
   }
 }

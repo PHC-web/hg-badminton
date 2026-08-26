@@ -153,7 +153,7 @@ onUnload(() => clearInterval(timer))
   background: $hg-bg;
 }
 .score-header {
-  background: linear-gradient(135deg, #00B87A, #006B48);
+  background: $hg-hero-gradient;
   color: #fff;
   padding: 28rpx 32rpx 32rpx;
   text-align: center;

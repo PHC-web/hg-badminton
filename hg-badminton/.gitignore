@@ -30,6 +30,9 @@ project.private.config.json
 *.jks
 local.properties
 
+# 微信小程序 AppSecret（勿上传；参考 config.example.json）
+uniCloud-aliyun/cloudfunctions/common/hg-config/config.json
+
 # uniCloud 本地与运行时
 uniCloud-aliyun/cloudfunctions/**/node_modules/
 uniCloud-tcb/cloudfunctions/**/node_modules/

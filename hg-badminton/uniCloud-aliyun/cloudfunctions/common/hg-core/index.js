@@ -122,6 +122,16 @@ function isAdmin(user) {
   return (user?.roles || []).some((r) => ['super_admin', 'admin'].includes(r))
 }
 
+function isSuper(user) {
+  return (user?.roles || []).includes('super_admin')
+}
+
+function assignableRoles(user) {
+  if (isSuper(user)) return ['admin', 'referee', 'captain', 'member']
+  if (isAdmin(user)) return ['referee', 'captain', 'member']
+  return []
+}
+
 module.exports = {
   judgeSetEnd,
   tallySets,
@@ -130,5 +140,7 @@ module.exports = {
   roundRobinRounds,
   knockoutFirstRound,
   rankingFromFixtures,
-  isAdmin
+  isAdmin,
+  isSuper,
+  assignableRoles
 }

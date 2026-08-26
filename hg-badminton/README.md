@@ -1,50 +1,58 @@
-# 追光羽毛球（hg-badminton）
+# 追光羽毛球（hg-badminton）v2
 
-羽毛球比赛管理小程序第一版。技术栈：uni-app Vue3 + Pinia + uniCloud。
+羽毛球小程序：日常活动报名 + 比赛（本期单循环赛）。账号使用**微信登录**。
 
-小程序显示名：**追光羽毛球**。工程名：`hg-badminton`。
+## 角色
 
-## 功能范围
+- 微信登录并完善手机号后，默认 **队员**
+- **超级管理员**：登录后在 uniCloud 控制台 `users` 表，将该用户 `roles` 改为含 `super_admin`（如 `["super_admin","admin","member"]`）
+- 超管可指定：管理员 / 裁判 / 队长 / 队员
+- 管理员可指定：裁判 / 队长 / 队员
 
-- 账号与角色（超管 / 管理员 / 队长 / 裁判 / 队员），角色申请与审核
-- 创建比赛（五步：基本信息 → 晋级方式 → 项目 → 记分规则 → 访问控制）
-- 队长报名、管理员审核
-- 三种晋级方式自动生成对阵（小组+淘汰 / 单淘汰 / 单循环）
-- 裁判实时记分（21/15 分制、净胜 2、30 分封顶、局间休息 120 秒）
-- 赛果与积分榜
-- 照片墙
-- 比赛密码门（白名单免密 + 本地缓存）
+用多个微信号分别登录即可模拟不同角色协作。
 
-## 本地预览（H5）
+## Tab
+
+底部三个入口：**日常活动 / 比赛 / 我的**。  
+点进某场比赛后，页内嵌套 Tab：介绍 · 报名 · 对阵 · 赛果。
+
+## 微信登录接入（必做）
+
+1. 确认 `src/manifest.json` → `mp-weixin.appid` 为你的小程序 AppID  
+2. HBuilderX：关联 uniCloud 服务空间，按顺序上传：
+   - 公共模块：`hg-shared`、`hg-core`、`hg-config`
+   - 云函数：`hg-base`、`hg-activity`、`hg-match`
+   - 云对象：`hg-gateway`（客户端唯一入口）
+   - 数据库 schema（至少 `users`）
+3. 在 uniCloud 控制台 → 云函数 **hg-base** → 环境变量 → 编辑，添加：
+
+| Key | Value |
+| --- | --- |
+| `WX_APPID` | 小程序 AppID |
+| `WX_APP_SECRET` | 微信公众平台 AppSecret |
+
+（密钥配在 `hg-base` 上，不是 gateway。）
+
+4. 微信开发者工具运行 → 微信一键登录 → 完善姓名手机号  
+5. 云数据库将第一个账号 `roles` 设为含 `super_admin`，其它微信号由超管在「角色管理」指定
+
+架构说明见 `docs/云函数架构.md`。
+
+## 功能
+
+### 日常活动
+发布活动、组别限制、报名/代报名、满员排队、取消补位并消息提醒、名单查看。
+
+### 比赛（单循环）
+发布比赛、队长建队、队员申请入队（队长审批）、生成对阵、观众审批、指派裁判记分、实时赛果。
+
+## 运行
 
 ```bash
-cd hg-badminton
 npm install
-npm run dev:h5
+npm run dev:mp-weixin
 ```
 
-打开控制台提示的本地地址。登录页可选择演示身份：
+设计文档见 `docs/设计文档-v2.md`。
 
-- 林教练：超级管理员
-- 李飞：队长
-- 王浩然：裁判
-- 张思雨：队员
-
-未关联云空间时，数据保存在本地 `storage`，可直接走通全流程。
-
-## 微信小程序
-
-1. `npm run dev:mp-weixin`
-2. 用微信开发者工具打开 `dist/dev/mp-weixin`
-3. 在 `src/manifest.json` 的 `mp-weixin.appid` 填入小程序 AppID
-
-也可使用 HBuilderX 打开本目录，发行到微信小程序。
-
-## 关联 uniCloud
-
-1. 用 HBuilderX 打开本工程
-2. 在 `uniCloud-aliyun` 上右键「关联云服务空间」
-3. 上传公共模块 `hg-core`、云对象 `hg-api`，并在云数据库初始化 schema
-4. 客户端设置里打开「使用云端数据」后，`src/api/index.js` 会走 `uniCloud.importObject('hg-api')`
-
-云数据库集合：`users` `matches` `match_items` `teams` `groups` `fixtures` `sub_fixtures` `photos` `score_logs` `role_applications`。客户端无直连权限，业务一律走云对象。
+说明：账号、角色、组别、日常活动已存 uniCloud；比赛业务数据当前仍在本机本地库。首次登录后会自动尝试把本机旧活动导入云端一次。

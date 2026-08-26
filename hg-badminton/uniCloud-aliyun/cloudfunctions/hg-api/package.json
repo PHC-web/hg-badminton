@@ -1,14 +1,12 @@
 {
   "name": "hg-api",
-  "version": "1.0.0",
-  "description": "追光羽毛球业务云对象",
+  "version": "2.0.0",
+  "description": "已废弃：请使用 hg-gateway。本对象仅兼容转发。",
   "main": "index.obj.js",
   "cloudfunction-config": {
-    "memorySize": 256,
+    "memorySize": 128,
     "timeout": 60,
     "runtime": "Nodejs18"
   },
-  "dependencies": {
-    "hg-core": "file:../common/hg-core"
-  }
+  "dependencies": {}
 }

@@ -69,7 +69,7 @@ function upload() {
           matchId: id.value,
           url: path,
           caption: '比赛瞬间',
-          color: ['#5BC8A0', '#FFB37E', '#7FB5FF', '#B79CFF'][Math.floor(Math.random() * 4)]
+          color: ['#2B9FE0', '#E8913A', '#7FB5FF', '#1AAE8F'][Math.floor(Math.random() * 4)]
         })
       }
       toast('上传成功', 'success')
@@ -126,7 +126,7 @@ onLoad((q) => {
   position: absolute;
   right: 8rpx;
   top: 8rpx;
-  color: #FFC53D;
+  color: $hg-yellow;
   font-size: 28rpx;
 }
 .upload-box {

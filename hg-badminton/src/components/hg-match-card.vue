@@ -10,7 +10,7 @@
     </view>
     <view class="foot">
       <text class="dot-line">
-        <text class="dot" :style="{ background: st.chip === 'green' ? '#00A870' : st.chip === 'orange' ? '#F79B2A' : '#9AA1A9' }"></text>
+        <text class="dot" :class="['dot-' + (st.chip || 'gray')]"></text>
         {{ foot }}
       </text>
       <text class="enter">{{ enter }} ›</text>
@@ -87,7 +87,11 @@ const enter = computed(() => {
   height: 14rpx;
   border-radius: 50%;
   margin-right: 8rpx;
+  background: $hg-text3;
 }
+.dot-green { background: $hg-primary; }
+.dot-orange { background: $hg-accent; }
+.dot-gray { background: $hg-text3; }
 .enter {
   color: $hg-primary;
   font-weight: 600;

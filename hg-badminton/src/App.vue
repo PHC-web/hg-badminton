@@ -10,6 +10,18 @@ export default {
     const match = useMatchStore()
     user.restore()
     match.restore()
+    // 游客会话不跨冷启动保留，保证先进入登录页
+    if (user.isGuest) user.logout()
+    if (user.loggedIn) {
+      user.refreshProfile().then(() => {
+        if (user.needProfile || user.needApproval) {
+          uni.reLaunch({ url: '/pages/login/index' })
+          return
+        }
+        // 将本机旧活动/组别导入云端（仅一次）
+        api.migrateLocalToCloud().catch(() => {})
+      })
+    }
   }
 }
 </script>
@@ -90,8 +102,8 @@ view, text {
 }
 
 .btn-danger {
-  background: #FDECEC;
-  color: #C73E44;
+  background: $hg-lose-light;
+  color: $hg-lose;
   border: none;
   border-radius: 24rpx;
   height: 88rpx;

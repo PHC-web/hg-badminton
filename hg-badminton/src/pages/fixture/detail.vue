@@ -46,7 +46,7 @@
           <view class="s">{{ s.playerA }} vs {{ s.playerB }}</view>
         </view>
         <view class="right">
-          <text v-if="s.winner" :style="{ color: s.winner === 'a' ? '#00A870' : '#5B6470', fontWeight: 700, fontSize: '28rpx' }">
+          <text v-if="s.winner" class="score" :class="{ win: s.winner === 'a' }">
             {{ setScore(s) }}
           </text>
           <text class="sets">{{ s.setText }}</text>
@@ -204,6 +204,14 @@ onShow(() => {
   text-align: right;
   font-size: 24rpx;
   color: $hg-text3;
+}
+.score {
+  font-weight: 700;
+  font-size: 28rpx;
+  color: $hg-text2;
+}
+.score.win {
+  color: $hg-primary;
 }
 .sets {
   margin-left: 8rpx;

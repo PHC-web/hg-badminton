@@ -9,7 +9,7 @@
         </view>
         <view class="row" style="justify-content: space-between;">
           <text style="font-size: 26rpx; color: #5B6470;">队员名单（{{ form.members.length }} 人）</text>
-          <text v-if="!locked" style="font-size: 24rpx; color: #00A870;" @click="showAdd = true">＋ 添加队员</text>
+          <text v-if="!locked" class="add-member" @click="showAdd = true">＋ 添加队员</text>
         </view>
         <view v-if="form.registerStatus" style="margin-top: 12rpx;">
           <hg-chip :text="st.label" :type="st.chip" />
@@ -188,6 +188,11 @@ onLoad((q) => {
 <style lang="scss" scoped>
 .team-head {
   padding: 32rpx;
+}
+.add-member {
+  font-size: 24rpx;
+  color: $hg-primary;
+  font-weight: 600;
 }
 .member-row {
   display: flex;

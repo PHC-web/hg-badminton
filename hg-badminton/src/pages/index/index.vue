@@ -122,7 +122,7 @@ onShow(load)
 
 <style lang="scss" scoped>
 .hero {
-  background: linear-gradient(135deg, #00B87A 0%, #00875C 60%, #006B48 100%);
+  background: $hg-hero-gradient;
   border-radius: 0 0 40rpx 40rpx;
   padding: 28rpx 28rpx 88rpx;
   color: #fff;

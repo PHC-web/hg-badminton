@@ -1,0 +1,20 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "title"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": {},
+    "userId": { "bsonType": "string" },
+    "title": { "bsonType": "string" },
+    "content": { "bsonType": "string" },
+    "extra": {},
+    "read": { "bsonType": "bool" },
+    "createdAt": {}
+  }
+}

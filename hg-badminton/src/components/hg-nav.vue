@@ -28,7 +28,7 @@ const bar = ref(sys.statusBarHeight || 0)
 function goBack() {
   const pages = getCurrentPages()
   if (pages.length > 1) uni.navigateBack()
-  else uni.switchTab({ url: '/pages/index/index' })
+  else uni.switchTab({ url: '/pages/activity/index' })
 }
 </script>
 
@@ -42,7 +42,7 @@ function goBack() {
   background: #fff;
 }
 .nav.dark {
-  background: linear-gradient(135deg, #00B87A, #006B48);
+  background: $hg-hero-gradient;
   color: #fff;
 }
 .inner {

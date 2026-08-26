@@ -1,0 +1,6 @@
+{
+  "name": "hg-shared",
+  "version": "1.0.0",
+  "main": "index.js",
+  "description": "追光羽毛球云函数公共工具"
+}

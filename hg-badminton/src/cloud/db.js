@@ -2,19 +2,21 @@ import { DB_KEY } from '@/utils/constants'
 
 const COLLECTIONS = [
   'users',
+  'groups',
+  'activities',
+  'activity_registrations',
+  'notifications',
   'matches',
   'match_items',
   'teams',
-  'groups',
   'fixtures',
   'sub_fixtures',
-  'photos',
   'score_logs',
-  'role_applications'
+  'match_spectators'
 ]
 
 function empty() {
-  const db = { version: 1 }
+  const db = { version: 2 }
   COLLECTIONS.forEach((c) => {
     db[c] = []
   })
@@ -27,7 +29,8 @@ export function loadDb() {
   if (cache) return cache
   try {
     const raw = uni.getStorageSync(DB_KEY)
-    cache = raw && raw.users ? raw : empty()
+    if (raw && raw.version === 2 && raw.users) cache = raw
+    else cache = empty()
   } catch (e) {
     cache = empty()
   }

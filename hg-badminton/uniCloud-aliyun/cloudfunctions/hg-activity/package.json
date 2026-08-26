@@ -1,0 +1,15 @@
+{
+  "name": "hg-activity",
+  "version": "1.0.0",
+  "description": "日常活动业务",
+  "main": "index.js",
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 30,
+    "runtime": "Nodejs18"
+  },
+  "dependencies": {
+    "hg-core": "file:../common/hg-core",
+    "hg-shared": "file:../common/hg-shared"
+  }
+}

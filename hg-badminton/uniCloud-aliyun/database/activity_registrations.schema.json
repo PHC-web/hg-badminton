@@ -1,0 +1,24 @@
+{
+  "bsonType": "object",
+  "required": ["activityId", "status"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": { "description": "报名记录 ID" },
+    "activityId": { "bsonType": "string" },
+    "userId": { "bsonType": "string" },
+    "name": { "bsonType": "string" },
+    "phone": { "bsonType": "string" },
+    "department": { "bsonType": "string" },
+    "isProxy": { "bsonType": "bool" },
+    "proxyByUserId": { "bsonType": "string" },
+    "status": { "bsonType": "string", "description": "confirmed / queued / cancelled" },
+    "queueNo": { "bsonType": "int" },
+    "createdAt": {}
+  }
+}

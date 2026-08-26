@@ -1,11 +1,39 @@
 {
   "bsonType": "object",
-  "required": ["nickname", "roles"],
+  "required": ["openid", "roles"],
   "permission": {
     "read": false,
     "create": false,
     "update": false,
     "delete": false,
     "count": false
+  },
+  "properties": {
+    "_id": { "description": "用户 ID" },
+    "openid": { "bsonType": "string", "description": "微信 openid", "label": "openid" },
+    "unionid": { "bsonType": "string", "description": "微信 unionid" },
+    "phone": { "bsonType": "string", "description": "手机号" },
+    "realName": { "bsonType": "string", "description": "真实姓名" },
+    "nickname": { "bsonType": "string", "description": "昵称" },
+    "department": { "bsonType": "string", "description": "部门" },
+    "gender": { "bsonType": "string", "description": "性别 male/female" },
+    "roles": {
+      "bsonType": "array",
+      "description": "角色：member / captain / referee / admin / super_admin"
+    },
+    "contacts": { "bsonType": "array", "description": "常用联系人" },
+    "avatar": { "bsonType": "string" },
+    "verified": { "bsonType": "bool" },
+    "approveStatus": {
+      "bsonType": "string",
+      "description": "审核状态：空 / pending / approved / rejected"
+    },
+    "rejectReason": { "bsonType": "string" },
+    "groupIds": { "bsonType": "array", "description": "所属组别 ID" },
+    "submittedAt": {},
+    "approvedAt": {},
+    "createdAt": {},
+    "deleted": { "bsonType": "bool", "description": "软删除标记" },
+    "deletedAt": { "description": "软删除时间 ISO" }
   }
 }
