@@ -58,6 +58,14 @@ function matchPassword(password, user) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+function formatMailTime(value) {
+  const t = value ? new Date(value).getTime() : Date.now()
+  if (Number.isNaN(t)) return ''
+  const d = new Date(t + 8 * 3600 * 1000)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`
+}
+
 async function notifyPendingReview(applicant) {
   try {
     const cfg = hgConfig.getMail()
@@ -90,7 +98,7 @@ async function notifyPendingReview(applicant) {
         `姓名：${name}`,
         `手机号：${applicant.phone || ''}`,
         `部门：${applicant.department || ''}`,
-        `提交时间：${applicant.submittedAt || ''}`,
+        `提交时间：${formatMailTime(applicant.submittedAt)}`,
         '',
         '请打开小程序「我的 → 成员审核」处理。'
       ].join('\n')
