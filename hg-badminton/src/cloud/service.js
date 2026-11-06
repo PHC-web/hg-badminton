@@ -579,6 +579,11 @@ export const service = {
       avatar: patch.avatar !== undefined ? patch.avatar : u.avatar,
       verified: !!(patch.phone || u.phone)
     }
+    if (patch.email !== undefined && isSuper(u)) {
+      const email = String(patch.email || '').trim()
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail('邮箱格式不正确')
+      next.email = email
+    }
     // 首次完善资料 → 进入待审核（超管除外）
     if (patch.submitForReview && next.phone && next.realName) {
       if (isSuper(u) || u.approveStatus === 'approved') {

@@ -31,6 +31,10 @@
           <text class="field-label">部门</text>
           <input class="input" v-model="form.department" />
         </view>
+        <view v-if="user.isSuper" class="field">
+          <text class="field-label">通知邮箱</text>
+          <input class="input" v-model="form.email" placeholder="有新成员待审核时发到这里" />
+        </view>
         <button class="btn-primary" :loading="saving" @click="save">保存资料</button>
       </view>
 
@@ -76,7 +80,7 @@ const uploading = ref(false)
 const saving = ref(false)
 const dataMode = ref(api.getDataMode())
 const devEnv = isDevEnv()
-const form = reactive({ realName: '', phone: '', department: '', avatar: '' })
+const form = reactive({ realName: '', phone: '', department: '', avatar: '', email: '' })
 
 const letter = computed(() => initial(form.realName || user.profile?.nickname || '我'))
 const modeDesc = computed(() => {
@@ -92,6 +96,7 @@ onShow(() => {
   form.phone = user.profile?.phone || ''
   form.department = user.profile?.department || ''
   form.avatar = user.profile?.avatar || ''
+  form.email = user.profile?.email || ''
 })
 
 async function switchMode(mode) {
@@ -167,6 +172,10 @@ async function save() {
     toast('手机号格式不正确')
     return
   }
+  if (user.isSuper && form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    toast('邮箱格式不正确')
+    return
+  }
   saving.value = true
   try {
     const p = await api.updateProfile({
@@ -174,7 +183,8 @@ async function save() {
       phone: form.phone,
       department: form.department,
       nickname: form.realName || user.profile?.nickname,
-      avatar: form.avatar || ''
+      avatar: form.avatar || '',
+      email: user.isSuper ? form.email.trim() : undefined
     })
     user.persist(p)
     toast('已保存', 'success')

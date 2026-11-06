@@ -6,11 +6,14 @@
  * 环境变量（在本云函数上配置）：
  *   WX_APPID
  *   WX_APP_SECRET
+ *   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS
+ *   SUPER_ADMIN_EMAIL  审核通知收件人，多个用逗号分隔
  */
 
 const crypto = require('crypto')
 const core = require('hg-core')
 const hgConfig = require('hg-config')
+const { sendMail } = require('./mail')
 const {
   db,
   fail,
@@ -50,6 +53,50 @@ function matchPassword(password, user) {
     return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(user.passwordHash, 'hex'))
   } catch (e) {
     return false
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+async function notifyPendingReview(applicant) {
+  try {
+    const cfg = hgConfig.getMail()
+    if (!cfg.host || !cfg.user || !cfg.pass) {
+      console.log('[mail] 未配置 SMTP，跳过审核通知')
+      return
+    }
+    const emails = new Set(cfg.adminEmails.map((item) => item.toLowerCase()))
+    const { data } = await db.collection('users').where({ roles: 'super_admin' }).limit(50).get()
+    ;(data || []).forEach((item) => {
+      const email = String(item?.email || '').trim().toLowerCase()
+      if (item && !item.deleted && EMAIL_RE.test(email)) emails.add(email)
+    })
+    const to = [...emails]
+    if (!to.length) {
+      console.log('[mail] 没有超级管理员邮箱，跳过审核通知')
+      return
+    }
+    const name = applicant.realName || applicant.nickname || '新成员'
+    await sendMail({
+      host: cfg.host,
+      port: cfg.port,
+      user: cfg.user,
+      pass: cfg.pass,
+      to,
+      subject: '追光羽毛球：有新成员待审核',
+      text: [
+        `${name} 提交了成员资料，等待审核。`,
+        '',
+        `姓名：${name}`,
+        `手机号：${applicant.phone || ''}`,
+        `部门：${applicant.department || ''}`,
+        `提交时间：${applicant.submittedAt || ''}`,
+        '',
+        '请打开小程序「我的 → 成员审核」处理。'
+      ].join('\n')
+    })
+  } catch (e) {
+    console.error('[mail] 审核通知发送失败', e && e.message ? e.message : e)
   }
 }
 
@@ -252,11 +299,18 @@ const actions = {
       avatar: data.avatar !== undefined ? data.avatar : u.avatar,
       verified: !!(data.phone || u.phone)
     }
+    if (data.email !== undefined && core.isSuper(u)) {
+      const email = String(data.email || '').trim()
+      if (email && !EMAIL_RE.test(email)) fail('邮箱格式不正确')
+      patch.email = email
+    }
 
+    let notifyReview = false
     if (data.submitForReview && patch.phone && patch.realName) {
       if (core.isSuper(u) || u.approveStatus === 'approved') {
         patch.approveStatus = 'approved'
       } else {
+        notifyReview = u.approveStatus !== 'pending'
         patch.approveStatus = 'pending'
         patch.rejectReason = ''
         patch.submittedAt = nowIso()
@@ -264,7 +318,9 @@ const actions = {
     }
 
     await db.collection('users').doc(u._id).update(patch)
-    return publicUser({ ...u, ...patch })
+    const saved = { ...u, ...patch }
+    if (notifyReview) await notifyPendingReview(saved)
+    return publicUser(saved)
   },
 
   async addContact(contact = {}, { userId }) {

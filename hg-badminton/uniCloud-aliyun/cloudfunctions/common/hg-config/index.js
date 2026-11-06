@@ -19,11 +19,29 @@ function loadFileConfig() {
   return fileCached
 }
 
+function splitEmails(raw) {
+  return String(raw || '')
+    .split(/[,;，；\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))
+}
+
 module.exports = {
   getWeixin() {
     const file = loadFileConfig()
     const appId = (process.env.WX_APPID || file.appId || '').trim()
     const appSecret = (process.env.WX_APP_SECRET || file.appSecret || '').trim()
     return { appId, appSecret }
+  },
+
+  /** hg-base 环境变量：SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / SUPER_ADMIN_EMAIL */
+  getMail() {
+    return {
+      host: (process.env.SMTP_HOST || '').trim(),
+      port: Number(process.env.SMTP_PORT) || 465,
+      user: (process.env.SMTP_USER || '').trim(),
+      pass: process.env.SMTP_PASS || '',
+      adminEmails: splitEmails(process.env.SUPER_ADMIN_EMAIL)
+    }
   }
 }

@@ -16,6 +16,7 @@
     "passwordSalt": { "bsonType": "string", "description": "网页登录密码盐，不对外返回" },
     "unionid": { "bsonType": "string", "description": "微信 unionid" },
     "phone": { "bsonType": "string", "description": "手机号" },
+    "email": { "bsonType": "string", "description": "超级管理员通知邮箱" },
     "realName": { "bsonType": "string", "description": "真实姓名" },
     "nickname": { "bsonType": "string", "description": "昵称" },
     "department": { "bsonType": "string", "description": "部门" },
