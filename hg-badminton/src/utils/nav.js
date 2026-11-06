@@ -1,6 +1,19 @@
 import { useUserStore } from '@/stores/user'
 import { toast } from '@/utils/format'
 
+/** 自定义顶栏内容的上边距，避开微信右上角胶囊 */
+export function belowCapsuleTop() {
+  const sys = uni.getSystemInfoSync()
+  const bar = sys.statusBarHeight || 0
+  try {
+    const menu = uni.getMenuButtonBoundingClientRect?.()
+    if (menu && menu.bottom > bar) return menu.bottom + 10
+  } catch (e) {
+    /* 非微信环境没有胶囊 */
+  }
+  return bar + 48
+}
+
 export function openMatch(id) {
   uni.navigateTo({ url: `/pages/match/detail?id=${id}` })
 }

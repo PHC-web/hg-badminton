@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <view class="hero" :style="{ paddingTop: bar + 12 + 'px' }">
+    <view class="hero" :style="{ paddingTop: heroTop + 'px' }">
       <view class="hero-top">
         <view>
           <view class="greet">你好，{{ greet }}</view>
@@ -37,12 +37,12 @@ import { onShow } from '@dcloudio/uni-app'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { activityDisplayStatus, formatDate } from '@/utils/format'
-import { requireLogin, guardAppAccess } from '@/utils/nav'
+import { belowCapsuleTop, requireLogin, guardAppAccess } from '@/utils/nav'
 
 const user = useUserStore()
 const list = ref([])
 const loading = ref(false)
-const bar = uni.getSystemInfoSync().statusBarHeight || 0
+const heroTop = belowCapsuleTop()
 const greet = computed(() => {
   if (user.isGuest) return '游客'
   return user.profile?.realName || user.profile?.nickname || '球友'
