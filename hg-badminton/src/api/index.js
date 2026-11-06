@@ -93,13 +93,25 @@ function cloudReady() {
   return hasCloudClient()
 }
 
+function stripCloudFnName(text) {
+  let s = String(text || '')
+  let prev = ''
+  while (s !== prev) {
+    prev = s
+    s = s.replace(/^\s*\[[^\]]+\]\s*[:：]\s*/, '')
+  }
+  s = s.replace(/云函数\s*[a-zA-Z0-9_-]+/g, '')
+  s = s.replace(/\bhg-(?:gateway|base|activity|match|api|shared|core|config)\b/gi, '')
+  return s.replace(/\s{2,}/g, ' ').replace(/^[:：,\s]+/, '').trim()
+}
+
 function pickClientErr(e) {
   if (!e) return '操作失败'
-  if (typeof e === 'string') return e
+  if (typeof e === 'string') return stripCloudFnName(e) || '操作失败'
   const raw = e.errMsg || e.message || e.error?.message || e.error?.errMsg || ''
-  const text = String(raw).trim()
+  const text = stripCloudFnName(raw)
   if (!text) return '操作失败'
-  const lines = text.split(/[\n\r]+/).map((s) => s.trim()).filter(Boolean)
+  const lines = text.split(/[\n\r]+/).map((s) => stripCloudFnName(s)).filter(Boolean)
   return lines[lines.length - 1] || text
 }
 
@@ -129,7 +141,7 @@ async function invokeGateway(serviceName, action, data) {
   } catch (e) {
     let msg = isHxCliCloudError(e) ? spaceMissingMessage() : pickClientErr(e)
     if (action === 'webPasswordLogin' && /未知动作/.test(msg)) {
-      msg = '请先上传云函数 hg-base 与公共模块 hg-shared'
+      msg = '请先上传最新的云端代码后再试'
     }
     const err = new Error(msg)
     err.raw = e

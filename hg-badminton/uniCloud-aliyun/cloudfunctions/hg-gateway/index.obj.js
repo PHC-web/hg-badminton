@@ -86,7 +86,7 @@ async function callService(serviceKey, action, data, userId) {
       }
     })
   } catch (e) {
-    fail(pickErrMsg(e) || `调用 ${name} 失败`)
+    fail(pickErrMsg(e) || '服务暂时不可用，请稍后重试')
   }
 
   const errMsg = extractError(res)

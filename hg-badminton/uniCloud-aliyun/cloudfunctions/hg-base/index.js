@@ -109,7 +109,7 @@ async function getUserByLoginName(loginName) {
 async function code2Session(code) {
   const { appId, appSecret } = hgConfig.getWeixin()
   if (!appId || !appSecret) {
-    fail('未配置微信密钥：请在云函数 hg-base 环境变量设置 WX_APPID、WX_APP_SECRET')
+    fail('微信登录暂不可用，请联系管理员')
   }
   const res = await uniCloud.httpclient.request('https://api.weixin.qq.com/sns/jscode2session', {
     method: 'GET',
