@@ -7,5 +7,31 @@
     "update": false,
     "delete": false,
     "count": false
+  },
+  "properties": {
+    "_id": { "description": "小项场次 ID" },
+    "fixtureId": { "bsonType": "string", "description": "所属团体对阵" },
+    "itemId": { "bsonType": "string", "description": "比赛项目（男单等）" },
+    "code": { "bsonType": "string", "description": "对局编号如 BS001-R01-F01-MD1" },
+    "slotId": { "bsonType": "string", "description": "所属排期时段" },
+    "courtNo": { "bsonType": "int", "description": "场地号" },
+    "venue": { "bsonType": "string", "description": "场地号，如 1号" },
+    "scheduleTime": {},
+    "refereeIds": { "bsonType": "array", "description": "本小项裁判用户 ID" },
+    "playerAIds": { "bsonType": "array" },
+    "playerBIds": { "bsonType": "array" },
+    "playersA": { "bsonType": "array" },
+    "playersB": { "bsonType": "array" },
+    "lineupASubmitted": { "bsonType": "bool" },
+    "lineupBSubmitted": { "bsonType": "bool" },
+    "lineupASubmittedAt": {},
+    "lineupBSubmittedAt": {},
+    "lineupABy": { "bsonType": "string" },
+    "lineupBBy": { "bsonType": "string" },
+    "status": { "bsonType": "string" },
+    "currentSet": { "bsonType": "int" },
+    "sets": { "bsonType": "array" },
+    "winner": { "bsonType": "string" },
+    "createdAt": {}
   }
 }

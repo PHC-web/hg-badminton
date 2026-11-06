@@ -6,7 +6,12 @@
         <button v-if="matchId" class="btn-ghost" style="margin-top:16rpx;" @click="goSpectator">申请观众</button>
       </view>
       <view v-else>
-        <view class="section-title">{{ data.match?.name || '单循环对阵' }}</view>
+        <view class="section-title">{{ data.match?.name || '单循环对阵' }}
+          <view v-if="user.isAdmin && matchId" class="more-row">
+            <text class="section-more" @click="goSchedule">排期</text>
+            <text class="section-more" @click="goExport">导出对阵表</text>
+          </view>
+        </view>
         <view v-for="r in rounds" :key="r.name" class="card gcard">
           <view class="gt">{{ r.name }}</view>
           <hg-fixture-card v-for="f in r.list" :key="f._id" :item="f" @click="open(f)" />
@@ -63,6 +68,12 @@ async function load() {
 function open(f) {
   uni.navigateTo({ url: `/pages/fixture/detail?id=${f._id}` })
 }
+function goExport() {
+  uni.navigateTo({ url: `/pages/match/bracket-export?id=${matchId.value}` })
+}
+function goSchedule() {
+  uni.navigateTo({ url: `/pages/match/schedule?id=${matchId.value}` })
+}
 function goSpectator() {
   uni.navigateTo({ url: `/pages/match/spectator?id=${matchId.value}` })
 }
@@ -76,4 +87,5 @@ onShow(load)
 <style lang="scss" scoped>
 .gcard { overflow: hidden; margin-bottom: 20rpx; padding-bottom: 12rpx; }
 .gt { padding: 24rpx 28rpx 8rpx; font-weight: 600; font-size: 28rpx; }
+.more-row { display: flex; gap: 24rpx; }
 </style>

@@ -1,3 +1,4 @@
+import './scripts/unicloud-vite-env.js'
 import { defineConfig } from 'vite'
 import uni from '@dcloudio/vite-plugin-uni'
 

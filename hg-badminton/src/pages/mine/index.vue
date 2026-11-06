@@ -92,6 +92,11 @@
           <view class="lt">比赛管理</view>
           <view class="rs">发布 / 修改 ›</view>
         </view>
+        <view v-if="user.isAdmin" class="menu-item" @click="go('/pages/mine/web-login')">
+          <view class="mi" style="background:#E8F3FB;">💻</view>
+          <view class="lt">网页后台登录</view>
+          <view class="rs">扫码确认 ›</view>
+        </view>
         <view class="menu-item" @click="go('/pages/mine/settings')">
           <view class="mi" style="background:#F0F1F3;">⚙️</view>
           <view class="lt">设置</view>

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { USER_KEY, GUEST_PROFILE, GUEST_USER_ID } from '@/utils/constants'
 import { api } from '@/api'
 import { isAdmin, isSuper, isCaptain, isReferee, assignableRoles, isUserApproved } from '@/utils/format'
+import { isLocalSim } from '@/utils/data-mode'
 
 function uniLogin() {
   return new Promise((resolve, reject) => {
@@ -68,13 +69,14 @@ export const useUserStore = defineStore('user', {
       if (p) uni.setStorageSync(USER_KEY, p)
       else uni.removeStorageSync(USER_KEY)
     },
-    enterGuest() {
-      this.persist({ ...GUEST_PROFILE })
-      return this.profile
-    },
     async wxLogin() {
+      if (isLocalSim()) {
+        const u = await api.localDevLogin()
+        this.persist(u)
+        return u
+      }
       if (!api.cloudReady()) {
-        const err = new Error('登录服务暂不可用，请稍后重试')
+        const err = new Error('登录服务暂不可用，请稍后重试或切换本地模拟')
         uni.showToast({ title: err.message, icon: 'none' })
         throw err
       }
@@ -82,6 +84,14 @@ export const useUserStore = defineStore('user', {
       const u = await api.wxLogin({ code })
       this.persist(u)
       return u
+    },
+    enterGuest() {
+      if (!isLocalSim()) {
+        uni.showToast({ title: '云端模式请使用微信登录', icon: 'none' })
+        return null
+      }
+      this.persist({ ...GUEST_PROFILE })
+      return this.profile
     },
     async refreshProfile() {
       if (!this.profile?._id || this.profile.isGuest) return this.profile

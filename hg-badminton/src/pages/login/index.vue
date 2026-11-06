@@ -14,8 +14,12 @@
 
     <view class="dock" :style="{ paddingBottom: safeBottom + 'px' }">
       <view v-if="step === 'login'" class="dock-inner">
-        <button class="btn-login" :loading="loading" @click="doWxLogin">微信一键登录</button>
-        <button class="btn-guest" @click="enterGuest">游客模式</button>
+        <button class="btn-login" :loading="loading" @click="doWxLogin">
+          {{ localSim ? '本地模拟登录' : '微信一键登录' }}
+        </button>
+        <button v-if="localSim" class="btn-guest" @click="enterGuest">游客模式</button>
+        <view v-if="localSim" class="mode-tip">当前：本地全模拟（数据在本机）</view>
+        <view v-else-if="devEnv" class="mode-tip" @click="toLocalSim">云端不可用？点此切到本地模拟</view>
       </view>
 
       <view v-else-if="step === 'profile'" class="panel">
@@ -63,6 +67,8 @@ import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
 import { useMatchStore } from '@/stores/match'
 import { toast } from '@/utils/format'
+import { isDevEnv, isLocalSim, setDataMode } from '@/utils/data-mode'
+import { api } from '@/api'
 
 const sys = uni.getSystemInfoSync()
 const bar = sys.statusBarHeight || 0
@@ -72,6 +78,8 @@ const match = useMatchStore()
 const step = ref('login')
 const loading = ref(false)
 const form = reactive({ realName: '', phone: '', department: '' })
+const localSim = computed(() => isLocalSim())
+const devEnv = isDevEnv()
 
 const rejectReason = computed(
   () => user.profile?.rejectReason || '审核未通过，请修改资料后重新提交，或联系管理员。'
@@ -130,8 +138,20 @@ async function doWxLogin() {
 }
 
 function enterGuest() {
-  user.enterGuest()
+  if (!user.enterGuest()) return
   uni.switchTab({ url: '/pages/activity/index' })
+}
+
+async function toLocalSim() {
+  try {
+    setDataMode('local')
+    await api.seedDemo(false)
+    toast('已切换本地模拟', 'success')
+    // 刷新 computed：reLaunch 自身
+    uni.reLaunch({ url: '/pages/login/index' })
+  } catch (e) {
+    toast(e?.message || '切换失败')
+  }
 }
 
 async function saveProfile() {
@@ -181,6 +201,10 @@ function logout() {
 }
 
 onShow(() => {
+  // #ifdef H5
+  uni.reLaunch({ url: '/pages/admin/login' })
+  return
+  // #endif
   if (user.loggedIn) syncStep()
   else step.value = 'login'
 })
@@ -293,6 +317,12 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   border: 2rpx solid rgba(255, 255, 255, 0.55);
+}
+.mode-tip {
+  margin-top: 20rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.7);
 }
 .btn-login.dark {
   background: $hg-primary;

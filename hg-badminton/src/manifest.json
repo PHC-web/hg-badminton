@@ -1,6 +1,6 @@
 {
     "name" : "追光羽毛球",
-    "appid" : "__UNI__HGBADMNT",
+    "appid" : "__UNI__D250BA8",
     "description" : "羽毛球比赛全流程管理：创建、报名、对阵、记分、赛果、照片墙",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -35,9 +35,10 @@
         "usingComponents" : true,
         "permission" : {
             "scope.userLocation" : {
-                "desc" : "用于展示比赛举办地点"
+                "desc" : "用于选择和查看比赛举办地点"
             }
-        }
+        },
+        "requiredPrivateInfos" : [ "getLocation", "chooseLocation" ]
     },
     "mp-alipay" : {
         "usingComponents" : true

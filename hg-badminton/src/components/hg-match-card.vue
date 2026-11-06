@@ -3,7 +3,9 @@
     <view class="top">
       <view class="left">
         <view class="mname">{{ item.name }}</view>
-        <view class="meta">📅 {{ range }}　📍 {{ item.location }}</view>
+        <view class="meta">📅 {{ range }}　
+          <text :class="{ 'loc-link': hasGeo(item) }" @click.stop="openMapLocation(item)">📍 {{ item.location }}</text>
+        </view>
         <view class="meta">👥 {{ item.teamCount || 0 }} 支队伍 · {{ item.fixtureCount || 0 }} 场 · {{ item.memberCount || 0 }} 名队员</view>
       </view>
       <hg-chip :text="st.label" :type="st.chip" />
@@ -21,6 +23,7 @@
 <script setup>
 import { computed } from 'vue'
 import { matchStatus, formatRange, daysUntil } from '@/utils/format'
+import { hasGeo, openMapLocation } from '@/utils/location'
 
 const props = defineProps({ item: Object })
 defineEmits(['click'])
@@ -70,6 +73,9 @@ const enter = computed(() => {
   font-size: 24rpx;
   color: $hg-text2;
   line-height: 1.7;
+}
+.loc-link {
+  color: $hg-primary;
 }
 .foot {
   display: flex;

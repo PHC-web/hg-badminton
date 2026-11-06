@@ -7,5 +7,25 @@
     "update": false,
     "delete": false,
     "count": false
+  },
+  "properties": {
+    "_id": { "description": "团体对阵 ID" },
+    "matchId": { "bsonType": "string" },
+    "round": { "bsonType": "string" },
+    "roundNo": { "bsonType": "int" },
+    "roundShort": { "bsonType": "string" },
+    "stage": { "bsonType": "string" },
+    "groupId": { "bsonType": "string" },
+    "teamAId": { "bsonType": "string" },
+    "teamBId": { "bsonType": "string" },
+    "status": { "bsonType": "string" },
+    "venue": { "bsonType": "string" },
+    "courtStart": { "bsonType": "int" },
+    "courtEnd": { "bsonType": "int" },
+    "scheduleTime": {},
+    "refereeIds": { "bsonType": "array" },
+    "result": { "bsonType": "object" },
+    "code": { "bsonType": "string" },
+    "createdAt": {}
   }
 }

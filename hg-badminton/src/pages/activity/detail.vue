@@ -44,9 +44,9 @@
           游客可浏览活动信息。登录后即可报名。
           <button class="btn-primary" style="margin-top: 16rpx;" @click="goLogin">去登录</button>
         </view>
-        <button v-else-if="a.myRegistration && a.myRegistration.status !== 'cancelled'" class="btn-danger" @click="cancel">取消报名</button>
-        <button v-else-if="a.canRegister" class="btn-primary" @click="goReg">去报名{{ a.remain ? '' : '（排队）' }}</button>
-        <view v-else class="rule-box">当前不可报名</view>
+        <button v-else-if="st.key === 'open' && a.myRegistration && a.myRegistration.status !== 'cancelled'" class="btn-danger" @click="cancel">取消报名</button>
+        <button v-else-if="st.key === 'open' && a.canRegister" class="btn-primary" @click="goReg">去报名{{ a.remain ? '' : '（排队）' }}</button>
+        <view v-else-if="st.key === 'open'" class="rule-box">当前不可报名</view>
       </view>
     </view>
   </view>
@@ -57,13 +57,13 @@ import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
-import { activityStatus, formatDate, maskPhone, toast, confirm } from '@/utils/format'
+import { activityDisplayStatus, formatDate, maskPhone, toast, confirm } from '@/utils/format'
 
 const user = useUserStore()
 const id = ref('')
 const a = ref(null)
 const isGuest = computed(() => user.isGuest)
-const st = computed(() => activityStatus(a.value?.status))
+const st = computed(() => activityDisplayStatus(a.value))
 const confirmed = computed(() => (a.value?.registrations || []).filter((r) => r.status === 'confirmed'))
 const queued = computed(() => (a.value?.registrations || []).filter((r) => r.status === 'queued'))
 

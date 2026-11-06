@@ -11,6 +11,9 @@
   "properties": {
     "_id": { "description": "用户 ID" },
     "openid": { "bsonType": "string", "description": "微信 openid", "label": "openid" },
+    "loginName": { "bsonType": "string", "description": "网页后台登录名" },
+    "passwordHash": { "bsonType": "string", "description": "网页登录密码哈希，不对外返回" },
+    "passwordSalt": { "bsonType": "string", "description": "网页登录密码盐，不对外返回" },
     "unionid": { "bsonType": "string", "description": "微信 unionid" },
     "phone": { "bsonType": "string", "description": "手机号" },
     "realName": { "bsonType": "string", "description": "真实姓名" },

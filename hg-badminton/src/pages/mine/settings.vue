@@ -33,13 +33,30 @@
         </view>
         <button class="btn-primary" :loading="saving" @click="save">保存资料</button>
       </view>
+
+      <template v-if="devEnv">
+        <view class="section-title">数据模式</view>
+        <view class="menu-list">
+          <view class="menu-item mode-row">
+            <view class="lt">
+              <view>运行模式</view>
+              <view class="mode-desc">{{ modeDesc }}</view>
+            </view>
+            <view class="mode-switch">
+              <text class="mode-chip" :class="{ on: dataMode === 'cloud' }" @click="switchMode('cloud')">云端</text>
+              <text class="mode-chip" :class="{ on: dataMode === 'local' }" @click="switchMode('local')">本地</text>
+            </view>
+          </view>
+        </view>
+      </template>
+
       <view class="section-title">账号</view>
       <view class="menu-list">
         <view class="menu-item" @click="logout">
           <view class="lt" style="color:#C73E44;">退出登录</view>
         </view>
       </view>
-      <view class="ver">追光羽毛球</view>
+      <view class="ver">追光羽毛球<text v-if="devEnv"> · {{ dataMode === 'local' ? '本地模拟' : '云端' }}</text></view>
     </view>
   </view>
 </template>
@@ -49,22 +66,62 @@ import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
-import { toast, initial } from '@/utils/format'
+import { toast, initial, confirm } from '@/utils/format'
 import { uploadUserAvatar } from '@/utils/upload'
+import { USE_LOCAL_SIM } from '@/utils/constants'
+import { isDevEnv } from '@/utils/data-mode'
 
 const user = useUserStore()
 const uploading = ref(false)
 const saving = ref(false)
+const dataMode = ref(api.getDataMode())
+const devEnv = isDevEnv()
 const form = reactive({ realName: '', phone: '', department: '', avatar: '' })
 
 const letter = computed(() => initial(form.realName || user.profile?.nickname || '我'))
+const modeDesc = computed(() => {
+  if (USE_LOCAL_SIM) return '编译期已强制本地（USE_LOCAL_SIM=true）'
+  return dataMode.value === 'local'
+    ? '全部业务走本机存储，适合离线调试'
+    : '全部业务走 uniCloud，不写本地业务库'
+})
 
 onShow(() => {
+  dataMode.value = api.getDataMode()
   form.realName = user.profile?.realName || ''
   form.phone = user.profile?.phone || ''
   form.department = user.profile?.department || ''
   form.avatar = user.profile?.avatar || ''
 })
+
+async function switchMode(mode) {
+  if (mode === dataMode.value) return
+  if (USE_LOCAL_SIM && mode !== 'local') {
+    toast('编译期已强制本地模拟')
+    return
+  }
+  const tip =
+    mode === 'local'
+      ? '切换到本地模拟后，所有数据读写本机，不再访问云端。是否继续？'
+      : '切换到云端后，将使用 uniCloud 数据。是否继续？'
+  if (!(await confirm(tip))) return
+  try {
+    api.setDataMode(mode)
+    dataMode.value = mode
+    if (mode === 'local') {
+      try {
+        await api.seedDemo(false)
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    toast(mode === 'local' ? '已切换到本地模拟' : '已切换到云端', 'success')
+    user.logout()
+    setTimeout(() => uni.reLaunch({ url: '/pages/login/index' }), 400)
+  } catch (e) {
+    toast(e?.message || '切换失败')
+  }
+}
 
 async function setAvatarFromPath(filePath) {
   if (!filePath) return
@@ -194,8 +251,33 @@ function logout() {
   padding-left: 8rpx;
 }
 .menu-list { background: #fff; border-radius: 28rpx; overflow: hidden; }
-.menu-item { display: flex; padding: 28rpx 32rpx; border-bottom: 1rpx solid #F7F8FA; }
+.menu-item { display: flex; padding: 28rpx 32rpx; border-bottom: 1rpx solid #F7F8FA; align-items: center; }
 .lt { flex: 1; }
+.mode-row { align-items: flex-start; }
+.mode-desc {
+  font-size: 22rpx;
+  color: $hg-text3;
+  margin-top: 8rpx;
+  line-height: 1.5;
+}
+.mode-switch {
+  display: flex;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+.mode-chip {
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid $hg-line;
+  font-size: 24rpx;
+  color: $hg-text2;
+}
+.mode-chip.on {
+  border-color: $hg-primary;
+  color: $hg-primary;
+  background: $hg-primary-light;
+  font-weight: 600;
+}
 .ver {
   text-align: center;
   font-size: 22rpx;

@@ -8,6 +8,7 @@
  *   WX_APP_SECRET
  */
 
+const crypto = require('crypto')
 const core = require('hg-core')
 const hgConfig = require('hg-config')
 const {
@@ -21,6 +22,42 @@ const {
   needUser,
   createHandler
 } = require('hg-shared')
+
+/** 仅本地 dev 网页可带此令牌走账号登录；正式打包不会带上 */
+const LOCAL_WEB_LOGIN_TOKEN = 'hg-dev-web-admin-v1'
+/** 小程序未发布时，本地网页后台可用此账号进入 */
+const WEB_BOOTSTRAP_LOGIN = 'admin'
+const WEB_BOOTSTRAP_PASSWORD = '123456Abc'
+const WEB_BOOTSTRAP_USER_ID = 'u_web_admin'
+
+function isLocalWebRequest(data = {}) {
+  return data.localToken === LOCAL_WEB_LOGIN_TOKEN
+}
+
+function hashPassword(password, salt) {
+  return crypto.pbkdf2Sync(String(password), String(salt), 100000, 32, 'sha256').toString('hex')
+}
+
+function newPasswordRecord(password) {
+  const passwordSalt = crypto.randomBytes(16).toString('hex')
+  return { passwordSalt, passwordHash: hashPassword(password, passwordSalt) }
+}
+
+function matchPassword(password, user) {
+  if (!user?.passwordSalt || !user?.passwordHash) return false
+  const actual = hashPassword(password, user.passwordSalt)
+  try {
+    return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(user.passwordHash, 'hex'))
+  } catch (e) {
+    return false
+  }
+}
+
+async function getUserByLoginName(loginName) {
+  if (!loginName) return null
+  const { data } = await db.collection('users').where({ loginName }).limit(20).get()
+  return (data || []).find((u) => u && !u.deleted) || null
+}
 
 async function code2Session(code) {
   const { appId, appSecret } = hgConfig.getWeixin()
@@ -42,6 +79,52 @@ async function code2Session(code) {
   if (body.errcode) fail(`微信登录失败：${body.errmsg || body.errcode}`)
   if (!body.openid) fail('微信登录失败：未返回 openid')
   return body
+}
+
+let tokenCache = { token: '', expireAt: 0 }
+
+async function getAccessToken() {
+  const { appId, appSecret } = hgConfig.getWeixin()
+  if (!appId || !appSecret) return ''
+  if (tokenCache.token && Date.now() < tokenCache.expireAt) return tokenCache.token
+  const res = await uniCloud.httpclient.request('https://api.weixin.qq.com/cgi-bin/token', {
+    method: 'GET',
+    data: { grant_type: 'client_credential', appid: appId, secret: appSecret },
+    dataType: 'json',
+    timeout: 10000
+  })
+  const body = res.data || {}
+  if (!body.access_token) return ''
+  tokenCache = {
+    token: body.access_token,
+    expireAt: Date.now() + Math.max(60, Number(body.expires_in || 7200) - 200) * 1000
+  }
+  return tokenCache.token
+}
+
+async function makeWxacode(scene, envVersion = 'release') {
+  const token = await getAccessToken()
+  if (!token) return ''
+  const res = await uniCloud.httpclient.request(
+    `https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=${encodeURIComponent(token)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      content: JSON.stringify({
+        scene,
+        page: 'pages/mine/web-login',
+        check_path: false,
+        env_version: envVersion,
+        width: 280
+      }),
+      dataType: 'arraybuffer',
+      timeout: 15000
+    }
+  )
+  const buf = Buffer.from(res.data || [])
+  const peek = buf.slice(0, 80).toString('utf8')
+  if (peek.includes('errcode') || peek.includes('{')) return ''
+  return `data:image/png;base64,${buf.toString('base64')}`
 }
 
 const actions = {
@@ -86,6 +169,63 @@ const actions = {
         await db.collection('users').doc(u._id).update(patch)
         u = { ...u, ...patch }
       }
+    }
+    return publicUser(u)
+  },
+
+  async webPasswordLogin(data = {}) {
+    if (!isLocalWebRequest(data)) fail('正式环境仅支持微信扫码登录')
+    const loginName = String(data.loginName || data.username || '').trim()
+    const password = String(data.password || '')
+    if (!loginName || !password) fail('请输入账号和密码')
+
+    let u = await getUserByLoginName(loginName)
+    if (!u && loginName === WEB_BOOTSTRAP_LOGIN && password === WEB_BOOTSTRAP_PASSWORD) {
+      const exist = (await db.collection('users').doc(WEB_BOOTSTRAP_USER_ID).get()).data[0]
+      if (exist && !exist.deleted) {
+        u = exist
+      } else {
+        const secret = newPasswordRecord(WEB_BOOTSTRAP_PASSWORD)
+        u = {
+          _id: WEB_BOOTSTRAP_USER_ID,
+          openid: 'web:admin',
+          loginName: WEB_BOOTSTRAP_LOGIN,
+          ...secret,
+          phone: '13800000000',
+          realName: '系统管理员',
+          nickname: '管理员',
+          department: '系统',
+          gender: 'male',
+          roles: ['super_admin', 'admin', 'member'],
+          groupIds: [],
+          contacts: [],
+          avatar: '',
+          verified: true,
+          approveStatus: 'approved',
+          approvedAt: nowIso(),
+          deleted: false,
+          createdAt: nowIso()
+        }
+        const { _id, ...fields } = u
+        await db.collection('users').doc(_id).set(fields)
+      }
+    }
+
+    if (
+      u &&
+      loginName === WEB_BOOTSTRAP_LOGIN &&
+      password === WEB_BOOTSTRAP_PASSWORD &&
+      !matchPassword(password, u)
+    ) {
+      const secret = newPasswordRecord(WEB_BOOTSTRAP_PASSWORD)
+      await db.collection('users').doc(u._id).update(secret)
+      u = { ...u, ...secret }
+    }
+
+    if (!u || u.deleted || !matchPassword(password, u)) fail('账号或密码错误')
+    if (!core.isAdmin(u)) fail('仅管理员可登录网页后台')
+    if (!core.isSuper(u) && u.approveStatus && u.approveStatus !== 'approved') {
+      fail('账号尚未审核通过')
     }
     return publicUser(u)
   },
@@ -411,6 +551,80 @@ const actions = {
       count += 1
     }
     return { groups: count }
+  },
+
+  async createWebLoginTicket(data = {}) {
+    const ticketId = Math.random().toString(36).slice(2, 10)
+    const expireAt = Date.now() + 5 * 60 * 1000
+    await db.collection('web_login_tickets').doc(ticketId).set({
+      status: 'pending',
+      userId: '',
+      consumed: false,
+      createdAt: nowIso(),
+      expireAt
+    })
+    const versions = isLocalWebRequest(data) ? ['develop', 'trial', 'release'] : ['release']
+    let qrBase64 = ''
+    for (const envVersion of versions) {
+      try {
+        qrBase64 = await makeWxacode(ticketId, envVersion)
+      } catch (e) {
+        qrBase64 = ''
+      }
+      if (qrBase64) break
+    }
+    return { ticketId, qrBase64, expireAt }
+  },
+
+  async pollWebLoginTicket(data = {}) {
+    const ticketId = String(data.ticketId || '').trim()
+    if (!ticketId) return { status: 'invalid' }
+    let t = null
+    try {
+      const { data: rows } = await db.collection('web_login_tickets').doc(ticketId).get()
+      t = rows[0] || null
+    } catch (e) {
+      return { status: 'invalid' }
+    }
+    if (!t) return { status: 'invalid' }
+    if (t.status === 'pending' && Date.now() > Number(t.expireAt || 0)) return { status: 'expired' }
+    if (t.status === 'approved' && t.userId && !t.consumed) {
+      const u = await getUser(t.userId)
+      if (!u || u.deleted || !core.isAdmin(u)) return { status: 'invalid' }
+      await db.collection('web_login_tickets').doc(ticketId).update({
+        consumed: true,
+        consumedAt: nowIso()
+      })
+      return { status: 'approved', user: publicUser(u) }
+    }
+    if (t.consumed) return { status: 'consumed' }
+    return { status: t.status || 'pending' }
+  },
+
+  async confirmWebLogin(data = {}, { userId }) {
+    const u = await needUser(userId)
+    if (!core.isAdmin(u)) fail('仅超级管理员/管理员可登录网页后台')
+    if (!core.isSuper(u) && u.approveStatus && u.approveStatus !== 'approved') {
+      fail('账号尚未审核通过')
+    }
+    const ticketId = String(data.ticketId || data.scene || '').trim()
+    if (!ticketId) fail('缺少登录码')
+    let t = null
+    try {
+      const { data: rows } = await db.collection('web_login_tickets').doc(ticketId).get()
+      t = rows[0] || null
+    } catch (e) {
+      fail('登录码无效或数据表未创建')
+    }
+    if (!t) fail('登录码无效')
+    if (t.status !== 'pending') fail('登录码已使用或已失效')
+    if (Date.now() > Number(t.expireAt || 0)) fail('登录码已过期，请在网页刷新二维码')
+    await db.collection('web_login_tickets').doc(ticketId).update({
+      status: 'approved',
+      userId: u._id,
+      confirmedAt: nowIso()
+    })
+    return { ok: true }
   },
 
   async listNotifications(_data, { userId }) {

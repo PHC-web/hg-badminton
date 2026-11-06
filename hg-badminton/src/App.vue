@@ -12,14 +12,27 @@ export default {
     match.restore()
     // 游客会话不跨冷启动保留，保证先进入登录页
     if (user.isGuest) user.logout()
+    // #ifdef H5
+    const href = typeof location !== 'undefined' ? location.href : ''
+    if (!/pages\/admin\//.test(href)) {
+      uni.reLaunch({
+        url: user.loggedIn && user.isAdmin ? '/pages/admin/index' : '/pages/admin/login'
+      })
+      return
+    }
+    // #endif
     if (user.loggedIn) {
       user.refreshProfile().then(() => {
+        // #ifdef H5
+        return
+        // #endif
         if (user.needProfile || user.needApproval) {
           uni.reLaunch({ url: '/pages/login/index' })
           return
         }
-        // 将本机旧活动/组别导入云端（仅一次）
+        // 将本机旧活动/组别/比赛导入云端（各仅一次）
         api.migrateLocalToCloud().catch(() => {})
+        api.migrateLocalMatchesToCloud().catch(() => {})
       })
     }
   }
@@ -190,6 +203,7 @@ view, text {
   gap: 20rpx;
 }
 
+/* #ifndef H5 */
 button {
   padding: 0;
   margin: 0;
@@ -198,4 +212,5 @@ button {
 button::after {
   border: none;
 }
+/* #endif */
 </style>

@@ -23,7 +23,8 @@
             <text class="link danger" @click="remove(a)">删除</text>
           </view>
         </view>
-        <hg-empty v-if="!list.length" text="暂无活动，点击右上角发布" />
+        <hg-loading v-if="loading && !list.length" />
+        <hg-empty v-if="!list.length && !loading" text="暂无活动，点击右上角发布" />
       </view>
 
       <view v-if="showForm || editingId">
@@ -131,7 +132,7 @@ import { reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api } from '@/api'
 import { ACTIVITY_PRESET, ACTIVITY_TEMPLATE_KEY } from '@/utils/constants'
-import { toast, confirm, activityStatus, formatDate } from '@/utils/format'
+import { toast, confirm, activityDisplayStatus, formatDate } from '@/utils/format'
 
 const list = ref([])
 const groups = ref([])
@@ -139,6 +140,7 @@ const templates = ref([])
 const showForm = ref(false)
 const editingId = ref('')
 const saving = ref(false)
+const loading = ref(false)
 const activeTplName = ref('')
 
 const form = reactive({
@@ -235,17 +237,22 @@ function resetForm() {
 }
 
 function st(a) {
-  return activityStatus(a.status)
+  return activityDisplayStatus(a)
 }
 function time(a) {
   return formatDate(a.startTime, true)
 }
 
 async function load() {
-  const [acts, gs] = await Promise.all([api.listActivities({}), api.listGroups()])
-  list.value = acts || []
-  groups.value = gs || []
-  loadTemplates()
+  loading.value = true
+  try {
+    const [acts, gs] = await Promise.all([api.listActivities({}), api.listGroups()])
+    list.value = acts || []
+    groups.value = gs || []
+    loadTemplates()
+  } finally {
+    loading.value = false
+  }
 }
 
 function toggle(id) {

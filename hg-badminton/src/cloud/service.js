@@ -21,13 +21,29 @@ import {
   genderCount
 } from '@/utils/format'
 import { DEFAULT_ITEMS, USER_KEY, GUEST_USER_ID } from '@/utils/constants'
+import { sanitizeMatchItems, sanitizeTeamRule } from '@/utils/match-format'
 import { judgeSetEnd, tallySets, judgeTeamWinner } from '@/utils/scoring'
-import { roundRobinRounds, rankingFromFixtures } from '@/utils/fixture-gen'
+import { rankingFromFixtures, planRoundRobin } from '@/utils/fixture-gen'
+import { nextMatchNo, makeFixtureCode, makeGameCode, slotDateTime } from '@/utils/match-code'
+import { normalizeConcurrent, itemGenderNeed, validateTeamConcurrent } from '@/utils/concurrent'
 
 function fail(message) {
   const err = new Error(message)
   err.biz = true
   throw err
+}
+
+function pickGeo(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const latitude = Number(raw.latitude)
+  const longitude = Number(raw.longitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (!latitude && !longitude)) return null
+  return {
+    name: String(raw.name || '').trim(),
+    address: String(raw.address || '').trim(),
+    latitude,
+    longitude
+  }
 }
 
 function resolveCtx(...args) {
@@ -125,6 +141,13 @@ function userName(id) {
   return col('users').findOne(id)?.nickname || col('users').findOne(id)?.realName || '未知'
 }
 
+function teamCaptainName(t) {
+  if (t.captainName) return t.captainName
+  const cap = (t.members || []).find((m) => m.isCaptain)
+  if (cap?.name) return cap.name
+  return userName(t.captainId)
+}
+
 function teamName(id) {
   if (!id) return '待定'
   return col('teams').findOne(id)?.name || '待定'
@@ -161,25 +184,99 @@ function hydrateMatch(m) {
   }
 }
 
-function hydrateFixture(f) {
+function hydrateFixture(f, viewer = null) {
   if (!f) return null
-  const subs = col('sub_fixtures').find((s) => s.fixtureId === f._id)
+  const teamA = col('teams').findOne(f.teamAId)
+  const teamB = col('teams').findOne(f.teamBId)
+  const subs = col('sub_fixtures')
+    .find((s) => s.fixtureId === f._id)
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
   const items = col('match_items').all()
   const itemMap = Object.fromEntries(items.map((i) => [i._id, i]))
+
+  const viewerOnA = viewer && teamSideOfUser(viewer, teamA) !== ''
+  const viewerOnB = viewer && teamSideOfUser(viewer, teamB) !== ''
+
+  const subFixtures = subs
+    .map((s) => {
+      const both = !!s.lineupASubmitted && !!s.lineupBSubmitted
+      // 本队可见本方；双方都提交后所有人可见双方
+      const canShowA = both || viewerOnA
+      const canShowB = both || viewerOnB
+      const playersA = canShowA ? s.playersA || resolvePlayers(teamA, s.playerAIds) : []
+      const playersB = canShowB ? s.playersB || resolvePlayers(teamB, s.playerBIds) : []
+      return {
+        ...s,
+        itemName: itemMap[s.itemId]?.name || '单项',
+        itemSort: itemMap[s.itemId]?.sort || 99,
+        memberCount: itemMap[s.itemId]?.memberCount || 1,
+        refereeNames: (s.refereeIds || []).map(userName).filter(Boolean).join('、'),
+        setText: (s.sets || [])
+          .filter((x) => x.winner || (x.aScore && x.bScore))
+          .map((x) => `${x.aScore}:${x.bScore}`)
+          .join(' · '),
+        lineupBothReady: both,
+        lineupASubmitted: !!s.lineupASubmitted,
+        lineupBSubmitted: !!s.lineupBSubmitted,
+        // 未公开时不返回 id，避免泄露
+        playerAIds: canShowA ? s.playerAIds || [] : [],
+        playerBIds: canShowB ? s.playerBIds || [] : [],
+        playersA,
+        playersB,
+        playerAText: canShowA
+          ? playersA.map((p) => p.name).join(' / ') || (s.lineupASubmitted ? '已提交' : '未提交')
+          : s.lineupASubmitted
+            ? '已提交（待双方确认后公开）'
+            : '未提交',
+        playerBText: canShowB
+          ? playersB.map((p) => p.name).join(' / ') || (s.lineupBSubmitted ? '已提交' : '未提交')
+          : s.lineupBSubmitted
+            ? '已提交（待双方确认后公开）'
+            : '未提交',
+        canSubmitA: !!(viewer && canSubmitLineupForTeam(viewer, teamA)),
+        canSubmitB: !!(viewer && canSubmitLineupForTeam(viewer, teamB))
+      }
+    })
+    .sort((a, b) => a.itemSort - b.itemSort)
+
+  const fixtureRefNames = (f.refereeIds || []).map(userName).filter(Boolean)
+  const subRefNames = subFixtures.flatMap((s) => (s.refereeNames ? s.refereeNames.split('、') : []))
+  const allRef = Array.from(new Set([...fixtureRefNames, ...subRefNames]))
+
   return {
     ...f,
-    teamAName: teamName(f.teamAId),
-    teamBName: teamName(f.teamBId),
-    refereeNames: (f.refereeIds || []).map(userName).join('、'),
-    subFixtures: subs.map((s) => ({
-      ...s,
-      itemName: itemMap[s.itemId]?.name || '单项',
-      setText: (s.sets || [])
-        .filter((x) => x.winner || (x.aScore && x.bScore))
-        .map((x) => `${x.aScore}:${x.bScore}`)
-        .join(' · ')
-    }))
+    teamAName: teamA?.name || teamName(f.teamAId),
+    teamBName: teamB?.name || teamName(f.teamBId),
+    refereeNames: allRef.join('、'),
+    subFixtures,
+    viewerOnA,
+    viewerOnB
   }
+}
+
+function teamSideOfUser(user, team) {
+  if (!user || !team) return ''
+  if (isAdmin(user)) return '' // 管理员不当作任一方，提交时再显式选边
+  if (team.captainId === user._id) return 'captain'
+  if ((team.members || []).some((m) => m.userId === user._id && m.status === 'active')) return 'member'
+  return ''
+}
+
+function resolvePlayers(team, ids = []) {
+  const map = Object.fromEntries((team?.members || []).map((m) => [m.id, m]))
+  return (ids || []).map((id) => {
+    const m = map[id]
+    return m
+      ? { id: m.id, userId: m.userId || '', name: m.name, gender: m.gender || 'male' }
+      : { id, userId: '', name: '未知', gender: 'male' }
+  })
+}
+
+function canSubmitLineupForTeam(user, team) {
+  if (!user || !team) return false
+  if (isAdmin(user)) return true
+  if (team.captainId === user._id) return true
+  return false
 }
 
 function hydrateActivity(a) {
@@ -198,6 +295,9 @@ function hydrateActivity(a) {
 function canViewMatch(matchId, user) {
   if (!user) return false
   if (isAdmin(user)) return true
+  const match = col('matches').findOne(matchId)
+  if (!match || match.deleted) return false
+  if ((match.refereeIds || []).includes(user._id)) return true
   const teams = col('teams').find((t) => t.matchId === matchId)
   const inTeam = teams.some(
     (t) =>
@@ -205,20 +305,43 @@ function canViewMatch(matchId, user) {
       (t.members || []).some((m) => m.userId === user._id && m.status === 'active')
   )
   if (inTeam) return true
-  if (col('fixtures').find((f) => f.matchId === matchId && (f.refereeIds || []).includes(user._id)).length) return true
+  if (col('fixtures').find((f) => f.matchId === matchId && (f.refereeIds || []).includes(user._id)).length) {
+    return true
+  }
+  const subHit = col('sub_fixtures').find((s) => (s.refereeIds || []).includes(user._id))
+  if (
+    subHit.some((s) => {
+      const f = col('fixtures').findOne(s.fixtureId)
+      return f && f.matchId === matchId
+    })
+  ) {
+    return true
+  }
   const sp = col('match_spectators').findOne((s) => s.matchId === matchId && s.userId === user._id && s.status === 'approved')
   return !!sp
 }
 
 function createSubFixtures(fixture, match) {
   const items = col('match_items').find((i) => i.matchId === match._id).sort((a, b) => a.sort - b.sort)
+  const seen = {}
   items.forEach((item) => {
+    seen[item.name] = (seen[item.name] || 0) + 1
     col('sub_fixtures').insert({
       _id: nid('sf_'),
       fixtureId: fixture._id,
       itemId: item._id,
+      code: makeGameCode(fixture.code, item.name, seen[item.name]),
       playerAIds: [],
       playerBIds: [],
+      venue: '',
+      scheduleTime: '',
+      slotId: '',
+      courtNo: 0,
+      refereeIds: [],
+      playersA: [],
+      playersB: [],
+      lineupASubmitted: false,
+      lineupBSubmitted: false,
       status: 'pending',
       currentSet: 1,
       sets: [{ aScore: 0, bScore: 0, winner: '' }],
@@ -226,6 +349,16 @@ function createSubFixtures(fixture, match) {
       createdAt: nowIso()
     })
   })
+}
+
+function canRefereeFixture(u, fixture, sub, match) {
+  if (!u) return false
+  if (isAdmin(u)) return true
+  const m = match || (fixture?.matchId ? col('matches').findOne(fixture.matchId) : null)
+  if (m && (m.refereeIds || []).includes(u._id)) return true
+  if (sub && (sub.refereeIds || []).includes(u._id)) return true
+  if ((fixture.refereeIds || []).includes(u._id)) return true
+  return false
 }
 
 function refreshFixtureResult(fixtureId) {
@@ -280,7 +413,88 @@ export const service = {
     return seedDemo(!!force)
   },
 
-  /** 将云端用户同步到本地业务库（同机多微信号共享本地数据） */
+  createWebLoginTicket() {
+    const ticketId = Math.random().toString(36).slice(2, 10)
+    const expireAt = Date.now() + 5 * 60 * 1000
+    col('web_login_tickets').insert({
+      _id: ticketId,
+      status: 'pending',
+      userId: '',
+      consumed: false,
+      createdAt: nowIso(),
+      expireAt
+    })
+    return { ticketId, qrBase64: '', expireAt }
+  },
+
+  pollWebLoginTicket({ ticketId } = {}) {
+    const t = col('web_login_tickets').findOne(ticketId)
+    if (!t) return { status: 'invalid' }
+    if (t.status === 'pending' && Date.now() > Number(t.expireAt || 0)) return { status: 'expired' }
+    if (t.status === 'approved' && t.userId && !t.consumed) {
+      const u = col('users').findOne(t.userId)
+      if (!u || u.deleted || !isAdmin(u)) return { status: 'invalid' }
+      col('web_login_tickets').update(ticketId, { consumed: true, consumedAt: nowIso() })
+      return { status: 'approved', user: { ...u, isGuest: false } }
+    }
+    if (t.consumed) return { status: 'consumed' }
+    return { status: t.status || 'pending' }
+  },
+
+  confirmWebLogin({ ticketId, scene } = {}, ctx) {
+    const u = needUser(ctx)
+    if (!isAdmin(u)) fail('仅超级管理员/管理员可登录网页后台')
+    const id = String(ticketId || scene || '').trim()
+    const t = col('web_login_tickets').findOne(id)
+    if (!t) fail('登录码无效')
+    if (t.status !== 'pending') fail('登录码已使用或已失效')
+    if (Date.now() > Number(t.expireAt || 0)) fail('登录码已过期，请在网页刷新二维码')
+    col('web_login_tickets').update(id, { status: 'approved', userId: u._id, confirmedAt: nowIso() })
+    return { ok: true }
+  },
+
+  webPasswordLogin({ loginName, username, password } = {}) {
+    const name = String(loginName || username || '').trim()
+    const pwd = String(password || '')
+    if (!name || !pwd) fail('请输入账号和密码')
+    if (name !== 'admin' || pwd !== '123456Abc') fail('账号或密码错误')
+    let u = col('users').findOne((x) => x.loginName === 'admin' && !x.deleted)
+    if (!u) {
+      u = {
+        _id: 'u_web_admin',
+        openid: 'web:admin',
+        loginName: 'admin',
+        phone: '13800000000',
+        realName: '系统管理员',
+        nickname: '管理员',
+        department: '系统',
+        gender: 'male',
+        roles: ['super_admin', 'admin', 'member'],
+        groupIds: [],
+        contacts: [],
+        avatar: '',
+        verified: true,
+        approveStatus: 'approved',
+        deleted: false,
+        isGuest: false,
+        createdAt: nowIso()
+      }
+      col('users').insert(u)
+    }
+    if (!isAdmin(u)) fail('仅管理员可登录网页后台')
+    const { passwordHash, passwordSalt, ...rest } = u
+    return { ...rest, isGuest: false }
+  },
+
+  /** 本地模拟登录：确保有演示库，并以超管身份进入 */
+  localDevLogin() {
+    seedDemo(false)
+    const u = col('users').findOne('u_lin') || col('users').all()[0]
+    if (!u) fail('本地演示数据初始化失败')
+    return { ...u, isGuest: false }
+  },
+
+  /** 将云端用户同步到本地业务库（仅本地模拟模式使用） */
   syncUser(cloudUser) {
     if (!cloudUser?.openid && !cloudUser?._id) fail('无效用户')
     let u =
@@ -818,7 +1032,9 @@ export const service = {
         ...col('fixtures')
           .find((f) => (f.refereeIds || []).includes(user._id))
           .map((f) => f.matchId),
-        ...col('matches').find((m) => m.creatorId === user._id).map((m) => m._id)
+        ...col('matches')
+          .find((m) => m.creatorId === user._id || (m.refereeIds || []).includes(user._id))
+          .map((m) => m._id)
       ])
       list = list.filter((m) => ids.has(m._id))
     }
@@ -839,12 +1055,14 @@ export const service = {
       .find((t) => t.matchId === id)
       .map((t) => ({
         ...t,
-        captainName: userName(t.captainId),
+        captainName: teamCaptainName(t),
         activeCount: activeMembers(t).length,
         maleCount: genderCount(t.members, 'male'),
         femaleCount: genderCount(t.members, 'female')
       }))
     m.canViewDetail = canViewMatch(id, user)
+    m.refereeNames = (m.refereeIds || []).map(userName).filter(Boolean).join('、')
+    m.isMatchReferee = !!(user && (m.refereeIds || []).includes(user._id))
     m.spectator = user
       ? col('match_spectators').findOne((s) => s.matchId === id && s.userId === user._id)
       : null
@@ -864,17 +1082,30 @@ export const service = {
     const progression = data.progression || 'round_robin'
     if (progression !== 'round_robin') fail('本期仅支持单循环赛，其他赛制即将开放')
     const id = nid('m_')
-    const items = (data.items?.length ? data.items : DEFAULT_ITEMS).map((it, i) => ({
-      _id: nid('mi_'),
-      matchId: id,
-      name: it.name,
-      memberCount: Number(it.memberCount) || 1,
-      sort: i + 1
-    }))
+    let items
+    try {
+      items = sanitizeMatchItems(data.items?.length ? data.items : DEFAULT_ITEMS).map((it) => ({
+        _id: nid('mi_'),
+        matchId: id,
+        name: it.name,
+        memberCount: it.memberCount,
+        sort: it.sort
+      }))
+    } catch (e) {
+      fail(e.message || '项目设置有误')
+    }
+    let teamRule
+    try {
+      teamRule = sanitizeTeamRule(data.teamRule, items.length)
+    } catch (e) {
+      fail(e.message || '赛制设置有误')
+    }
     const match = {
       _id: id,
+      matchNo: nextMatchNo(col('matches').all().filter((x) => x && !x.deleted).map((x) => x.matchNo)),
       name: data.name,
       location: data.location,
+      geo: pickGeo(data.geo),
       startDate: data.startDate,
       endDate: data.endDate || data.startDate,
       registerStart: data.registerStart,
@@ -885,8 +1116,14 @@ export const service = {
       maxMalePerTeam: Number(data.maxMalePerTeam) || 4,
       maxFemalePerTeam: Number(data.maxFemalePerTeam) || 4,
       scoring: data.scoring || { points: 21, deuceMargin: 2, capPoints: 30, setsPerMatch: 3 },
-      teamRule: data.teamRule || { mode: 'firstToWin', itemsWinToWin: 3 },
+      teamRule,
+      courtCount: Number(data.courtCount) || 10,
+      courtsPerMatch: Number(data.courtsPerMatch) || 2,
+      roundIntervalMinutes: Number(data.roundIntervalMinutes) || 45,
+      itemIntervalMinutes: Number(data.itemIntervalMinutes) || 0,
+      concurrent: normalizeConcurrent(data.concurrent),
       notice: data.notice || '',
+      refereeIds: Array.isArray(data.refereeIds) ? data.refereeIds.filter(Boolean) : [],
       deleted: false,
       creatorId: needUser(ctx)._id,
       published: data.publish !== false,
@@ -920,8 +1157,70 @@ export const service = {
     if (patch.maxTeams !== undefined) patch.maxTeams = Number(patch.maxTeams)
     if (patch.maxMalePerTeam !== undefined) patch.maxMalePerTeam = Number(patch.maxMalePerTeam)
     if (patch.maxFemalePerTeam !== undefined) patch.maxFemalePerTeam = Number(patch.maxFemalePerTeam)
+    if (patch.courtCount !== undefined) patch.courtCount = Number(patch.courtCount) || 10
+    if (patch.courtsPerMatch !== undefined) patch.courtsPerMatch = Number(patch.courtsPerMatch) || 2
+    if (patch.roundIntervalMinutes !== undefined) {
+      patch.roundIntervalMinutes = Number(patch.roundIntervalMinutes) || 45
+    }
+    if (patch.itemIntervalMinutes !== undefined) {
+      patch.itemIntervalMinutes = Math.max(0, Number(patch.itemIntervalMinutes) || 0)
+    }
+    if (patch.concurrent !== undefined) {
+      patch.concurrent = normalizeConcurrent(patch.concurrent)
+    }
     if (patch.progression) patch.progression = 'round_robin'
+    if (patch.refereeIds !== undefined) {
+      if (!Array.isArray(patch.refereeIds)) fail('裁判参数错误')
+      patch.refereeIds = patch.refereeIds.filter(Boolean)
+    }
+    if (data.geo !== undefined) patch.geo = pickGeo(data.geo)
+    if (data.items !== undefined) {
+      const fixtures = col('fixtures').find((f) => f.matchId === id)
+      if (fixtures.length) fail('已生成对阵，不能修改每场项目')
+      let nextItems
+      try {
+        nextItems = sanitizeMatchItems(data.items)
+      } catch (e) {
+        fail(e.message || '项目设置有误')
+      }
+      col('match_items').removeWhere((it) => it.matchId === id)
+      col('match_items').insertMany(
+        nextItems.map((it) => ({
+          _id: nid('mi_'),
+          matchId: id,
+          name: it.name,
+          memberCount: it.memberCount,
+          sort: it.sort
+        }))
+      )
+    }
+    const itemCount = col('match_items').find((it) => it.matchId === id).length
+    if (data.teamRule !== undefined || data.items !== undefined) {
+      try {
+        patch.teamRule = sanitizeTeamRule(data.teamRule || m.teamRule, itemCount)
+      } catch (e) {
+        fail(e.message || '赛制设置有误')
+      }
+    }
     return hydrateMatch(col('matches').update(id, patch))
+  },
+
+  setMatchReferees({ matchId, id, refereeIds }, ctx) {
+    needAdmin(ctx)
+    const mid = matchId || id
+    const m = col('matches').findOne(mid)
+    if (!m || m.deleted) fail('比赛不存在')
+    if (!Array.isArray(refereeIds)) fail('裁判参数错误')
+    const ids = refereeIds.filter(Boolean)
+    for (const rid of ids) {
+      const u = col('users').findOne(rid)
+      if (!u || u.deleted) fail('存在无效裁判用户')
+      const roles = u.roles || []
+      if (!roles.some((r) => ['referee', 'admin', 'super_admin'].includes(r))) {
+        fail(`${u.realName || u.nickname || rid} 不是裁判角色`)
+      }
+    }
+    return hydrateMatch(col('matches').update(mid, { refereeIds: ids }))
   },
 
   deleteMatch({ id }, ctx) {
@@ -942,26 +1241,59 @@ export const service = {
     if (!data.name) fail('请填写队名')
     if (!data.department) fail('请填写部门')
 
-    let team = data._id
-      ? col('teams').findOne(data._id)
-      : col('teams').findOne((t) => t.matchId === data.matchId && t.captainId === u._id)
+    const adminMode = isAdmin(u)
+    let team = data._id ? col('teams').findOne(data._id) : null
+    if (team && team.matchId !== data.matchId) fail('队伍不属于本场比赛')
+    if (!team && !adminMode) {
+      team = col('teams').findOne((t) => t.matchId === data.matchId && t.captainId === u._id)
+    }
+    if (team && !adminMode && team.captainId !== u._id) fail('无权编辑该队伍')
 
-    let members = data.members || team?.members || []
-    if (!members.some((m) => m.userId === u._id || m.isCaptain)) {
-      members = [
-        {
-          id: nid('mb_'),
-          userId: u._id,
-          name: u.realName || u.nickname,
-          phone: u.phone,
-          gender: u.gender || 'male',
-          idCard: '',
-          job: '',
-          status: 'active',
-          isCaptain: true
-        },
-        ...members
-      ]
+    // 队长身份：不自动把操作者写入队员名单
+    let captainId = team?.captainId || ''
+    let captainName = data.captainName !== undefined ? String(data.captainName || '').trim() : team?.captainName || ''
+    let captainPhone = data.captainPhone !== undefined ? String(data.captainPhone || '').trim() : team?.captainPhone || ''
+
+    if (adminMode) {
+      if (data.captainId) {
+        const cap = col('users').findOne(data.captainId)
+        if (!cap || cap.deleted) fail('指定队长不存在')
+        captainId = cap._id
+        if (!captainName) captainName = cap.realName || cap.nickname || ''
+        if (!captainPhone) captainPhone = cap.phone || ''
+      } else if (captainPhone) {
+        const cap = col('users').findOne((x) => !x.deleted && x.phone === captainPhone)
+        captainId = cap ? cap._id : ''
+        if (cap && !captainName) captainName = cap.realName || cap.nickname || ''
+      } else if (!team) {
+        captainId = ''
+      }
+    } else {
+      // 队长创建/维护自己的队伍：本人是队长，但不自动入队
+      captainId = team?.captainId || u._id
+      if (!captainName) captainName = u.realName || u.nickname || ''
+      if (!captainPhone) captainPhone = u.phone || ''
+    }
+
+    // 仅使用显式传入/已有队员，绝不自动追加管理员或队长
+    let members = Array.isArray(data.members) ? [...data.members] : [...(team?.members || [])]
+    members = members.map((m) => ({
+      id: m.id || nid('mb_'),
+      userId: m.userId || '',
+      name: m.name || '',
+      phone: m.phone || '',
+      gender: m.gender === 'female' ? 'female' : 'male',
+      idCard: m.idCard || '',
+      job: m.job || '',
+      status: m.status || 'active',
+      isCaptain: !!m.isCaptain
+    }))
+    // 若填写了队长手机，仅给同号队员打标（不新增人员）
+    if (captainPhone) {
+      members = members.map((m) => ({
+        ...m,
+        isCaptain: m.phone === captainPhone
+      }))
     }
 
     const active = members.filter((m) => m.status === 'active')
@@ -971,16 +1303,132 @@ export const service = {
     const teams = col('teams').find((t) => t.matchId === data.matchId)
     if (!team && teams.length >= match.maxTeams) fail('报名队伍已满')
 
+    // 队名去重（同场）
+    const dup = col('teams').findOne(
+      (t) => t.matchId === data.matchId && t.name === data.name && (!team || t._id !== team._id)
+    )
+    if (dup) fail(`队名「${data.name}」已存在`)
+
     const payload = {
       matchId: data.matchId,
       name: data.name,
       department: data.department,
       slogan: data.slogan || '',
-      captainId: team?.captainId || u._id,
+      captainId,
+      captainName,
+      captainPhone,
       members
     }
     if (team) return col('teams').update(team._id, payload)
     return col('teams').insert({ _id: nid('t_'), ...payload, createdAt: nowIso() })
+  },
+
+  /** 管理员批量导入全部队伍（Excel/CSV 解析后的结构化数据） */
+  importMatchTeams(data, ctx) {
+    const admin = needAdmin(ctx)
+    const matchId = data.matchId
+    const teams = Array.isArray(data.teams) ? data.teams : []
+    if (!matchId) fail('缺少比赛 id')
+    if (!teams.length) fail('没有可导入的队伍')
+    const match = col('matches').findOne(matchId)
+    if (!match || match.deleted) fail('比赛不存在')
+
+    let created = 0
+    let updated = 0
+    for (const row of teams) {
+      if (!row?.name) fail('存在缺少队名的行')
+      if (!row?.department) fail(`队伍「${row.name}」缺少部门`)
+      const exist = col('teams').findOne((t) => t.matchId === matchId && t.name === row.name)
+      const members = (row.members || []).map((m) => ({
+        id: nid('mb_'),
+        userId: '',
+        name: m.name,
+        phone: m.phone,
+        gender: m.gender === 'female' ? 'female' : 'male',
+        idCard: m.idCard || '',
+        job: m.job || '',
+        status: 'active',
+        isCaptain: false
+      }))
+      // 若队员里已有队长手机，标为队长
+      if (row.captainPhone) {
+        const i = members.findIndex((m) => m.phone === row.captainPhone)
+        if (i >= 0) members[i] = { ...members[i], isCaptain: true }
+      }
+      this.saveTeam(
+        {
+          _id: exist?._id,
+          matchId,
+          name: row.name,
+          department: row.department,
+          slogan: row.slogan || '',
+          captainName: row.captainName || '',
+          captainPhone: row.captainPhone || '',
+          members
+        },
+        { user: admin }
+      )
+      if (exist) updated++
+      else created++
+    }
+    return { ok: true, created, updated, total: teams.length }
+  },
+
+  /** 队长/管理员：批量写入本队队员（覆盖式合并：同手机号更新，新号追加） */
+  importTeamMembers(data, ctx) {
+    const u = needUser(ctx)
+    if (!hasAnyRole(u, ['super_admin', 'admin', 'captain'])) fail('需要队长权限')
+    const matchId = data.matchId
+    const incoming = Array.isArray(data.members) ? data.members : []
+    if (!matchId) fail('缺少比赛 id')
+    if (!incoming.length) fail('没有可导入的队员')
+
+    let team = data.teamId ? col('teams').findOne(data.teamId) : null
+    if (!team) {
+      team = col('teams').findOne((t) => t.matchId === matchId && t.captainId === u._id)
+    }
+    if (!team) fail('请先创建并保存队伍基本信息')
+    if (!isAdmin(u) && team.captainId !== u._id) fail('无权编辑该队伍')
+
+    const members = [...(team.members || [])]
+    for (const raw of incoming) {
+      if (!raw?.name || !raw?.phone) fail('队员须含姓名与手机号')
+      const gender = raw.gender === 'female' ? 'female' : 'male'
+      const idx = members.findIndex((m) => m.phone === String(raw.phone).trim())
+      const next = {
+        id: idx >= 0 ? members[idx].id : nid('mb_'),
+        userId: idx >= 0 ? members[idx].userId || '' : '',
+        name: String(raw.name).trim(),
+        phone: String(raw.phone).trim(),
+        gender,
+        idCard: String(raw.idCard || '').trim(),
+        job: String(raw.job || '').trim(),
+        status: idx >= 0 ? members[idx].status || 'active' : 'active',
+        isCaptain: idx >= 0 ? !!members[idx].isCaptain : false
+      }
+      if (idx >= 0) members[idx] = next
+      else members.push(next)
+    }
+
+    return this.saveTeam(
+      {
+        _id: team._id,
+        matchId: team.matchId,
+        name: team.name,
+        department: team.department,
+        slogan: team.slogan || '',
+        members
+      },
+      { user: u }
+    )
+  },
+
+  deleteTeam({ id }, ctx) {
+    needAdmin(ctx)
+    const team = col('teams').findOne(id)
+    if (!team) fail('队伍不存在')
+    col('teams').remove(id)
+    return { ok: true }
   },
 
   applyJoinTeam(data, ctx) {
@@ -1065,42 +1513,65 @@ export const service = {
   generateFixtures(matchId, ctx) {
     needAdmin(ctx)
     const match = col('matches').findOne(matchId)
-    if (!match) fail('比赛不存在')
+    if (!match || match.deleted) fail('比赛不存在')
     if (match.progression !== 'round_robin') fail('本期仅支持单循环赛')
-    const teams = col('teams').find((t) => t.matchId === matchId && activeMembers(t).length > 0)
-    if (teams.length < 2) fail('至少需要 2 支有效队伍')
+    // 纳入本场全部队伍（名单可赛前再交）；不再因无有效队员而排除
+    const teams = col('teams')
+      .find((t) => t.matchId === matchId)
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    if (teams.length < 2) fail('至少需要 2 支队伍才能生成单循环对阵')
     const old = col('fixtures').find((f) => f.matchId === matchId)
     old.forEach((f) => col('sub_fixtures').removeWhere((s) => s.fixtureId === f._id))
     col('fixtures').removeWhere((f) => f.matchId === matchId)
+    col('schedule_slots').removeWhere((s) => s.matchId === matchId)
+
+    let matchNo = match.matchNo
+    if (!matchNo) {
+      matchNo = nextMatchNo(col('matches').all().filter((x) => x && !x.deleted).map((x) => x.matchNo))
+      col('matches').update(matchId, { matchNo })
+    }
 
     const teamIds = teams.map((t) => t._id)
-    const rounds = roundRobinRounds(teamIds)
+    const planned = planRoundRobin(teamIds)
+
     let count = 0
-    rounds.forEach((pairs, ri) => {
-      pairs.forEach((p, pi) => {
-        const f = {
-          _id: nid('f_'),
-          matchId,
-          round: `第 ${ri + 1} 轮`,
-          stage: 'round',
-          groupId: '',
-          teamAId: p[0],
-          teamBId: p[1],
-          status: 'pending',
-          venue: `场地 ${(pi % 4) + 1}`,
-          scheduleTime: match.startDate,
-          refereeIds: [],
-          result: { winnerTeamId: '', teamAScore: 0, teamBScore: 0 },
-          code: `R${ri + 1}-${pi + 1}`,
-          createdAt: nowIso()
-        }
-        col('fixtures').insert(f)
-        createSubFixtures(f, match)
-        count += 1
-      })
+    let subCount = 0
+    planned.fixtures.forEach((row) => {
+      const f = {
+        _id: nid('f_'),
+        matchId,
+        round: row.roundLabel,
+        roundNo: row.roundNo,
+        roundShort: row.roundShort,
+        pairNo: row.pairNo,
+        stage: 'round',
+        groupId: '',
+        teamAId: row.teamAId,
+        teamBId: row.teamBId,
+        status: 'pending',
+        venue: '',
+        courtStart: 0,
+        courtEnd: 0,
+        scheduleTime: '',
+        refereeIds: [],
+        result: { winnerTeamId: '', teamAScore: 0, teamBScore: 0 },
+        code: makeFixtureCode(matchNo, row.roundNo, row.pairNo),
+        createdAt: nowIso()
+      }
+      col('fixtures').insert(f)
+      createSubFixtures(f, match)
+      subCount += col('sub_fixtures').find((s) => s.fixtureId === f._id).length
+      count += 1
     })
-    col('matches').update(matchId, { status: 'in_progress' })
-    return { count }
+    col('matches').update(matchId, { status: 'in_progress', matchNo })
+    return {
+      count,
+      subCount,
+      teamCount: teams.length,
+      rounds: planned.rounds,
+      matchNo,
+      expected: (teams.length * (teams.length - 1)) / 2
+    }
   },
 
   listFixtures(matchId, ctx) {
@@ -1113,7 +1584,14 @@ export const service = {
     if (matchId === GUEST_MATCH_ID) fail('无权查看对阵')
     if (!canViewMatch(matchId, user)) fail('无权查看对阵，请先参赛或申请观众权限')
     const match = hydrateMatch(col('matches').findOne(matchId))
-    const fixtures = col('fixtures').find((f) => f.matchId === matchId).map(hydrateFixture)
+    const fixtures = col('fixtures')
+      .find((f) => f.matchId === matchId)
+      .map((f) => hydrateFixture(f, user))
+      .sort((a, b) => {
+        const r = (a.roundNo || 0) - (b.roundNo || 0)
+        if (r) return r
+        return String(a.code || '').localeCompare(String(b.code || ''))
+      })
     const teams = col('teams').find((t) => t.matchId === matchId)
     return { match, fixtures, rank: rankingFromFixtures(teams, fixtures), groups: [] }
   },
@@ -1127,7 +1605,7 @@ export const service = {
     }
     const guestF = getGuestFixture(id)
     if (guestF) fail('对阵不存在')
-    const f = hydrateFixture(col('fixtures').findOne(id))
+    const f = hydrateFixture(col('fixtures').findOne(id), user)
     if (!f) fail('对阵不存在')
     if (!canViewMatch(f.matchId, user)) fail('无权查看')
     f.match = hydrateMatch(col('matches').findOne(f.matchId))
@@ -1136,7 +1614,229 @@ export const service = {
 
   assignReferee({ fixtureId, refereeIds }, ctx) {
     needAdmin(ctx)
-    return hydrateFixture(col('fixtures').update(fixtureId, { refereeIds: refereeIds || [] }))
+    const f0 = col('fixtures').findOne(fixtureId)
+    if (!f0) fail('对阵不存在')
+    const match = col('matches').findOne(f0.matchId)
+    const pool = match?.refereeIds || []
+    const ids = Array.isArray(refereeIds) ? refereeIds.filter(Boolean) : []
+    if (ids.length && !pool.length) fail('请先在比赛中指定本场裁判')
+    for (const rid of ids) {
+      if (!pool.includes(rid)) fail('只能从本场已选裁判中分配')
+    }
+    return hydrateFixture(col('fixtures').update(fixtureId, { refereeIds: ids }))
+  },
+
+  /** 为单个小项分配裁判与场地号 / 预计时间 */
+  assignSubFixture(data = {}, ctx) {
+    needAdmin(ctx)
+    const id = data.subFixtureId || data.id
+    if (!id) fail('缺少小项 id')
+    const sub = col('sub_fixtures').findOne(id)
+    if (!sub) fail('小项不存在')
+    const f = col('fixtures').findOne(sub.fixtureId)
+    if (!f) fail('对阵不存在')
+    const match = col('matches').findOne(f.matchId)
+    const pool = match?.refereeIds || []
+    const patch = {}
+    if (data.venue !== undefined) patch.venue = String(data.venue || '').trim()
+    if (data.scheduleTime !== undefined) {
+      const t = data.scheduleTime ? new Date(data.scheduleTime) : null
+      if (data.scheduleTime && (!t || Number.isNaN(t.getTime()))) fail('预计时间格式不正确')
+      patch.scheduleTime = data.scheduleTime ? t.toISOString() : ''
+    }
+    if (data.refereeIds !== undefined) {
+      if (!Array.isArray(data.refereeIds)) fail('裁判参数错误')
+      const ids = data.refereeIds.filter(Boolean)
+      if (ids.length && !pool.length) fail('请先在比赛中指定本场裁判')
+      for (const rid of ids) {
+        if (!pool.includes(rid)) fail('只能从本场已选裁判中分配')
+      }
+      patch.refereeIds = ids
+    }
+    if (data.refereeId) {
+      if (!pool.length) fail('请先在比赛中指定本场裁判')
+      if (!pool.includes(data.refereeId)) fail('只能从本场已选裁判中分配')
+      const cur = new Set([...(sub.refereeIds || []), ...(patch.refereeIds || [])])
+      cur.add(data.refereeId)
+      patch.refereeIds = Array.from(cur)
+    }
+    if (!Object.keys(patch).length) fail('无更新内容')
+    col('sub_fixtures').update(id, patch)
+    // 同步团体赛层面的裁判汇总（便于列表展示）
+    const allSubs = col('sub_fixtures').find((s) => s.fixtureId === f._id)
+    const ids = Array.from(
+      new Set([...(f.refereeIds || []), ...allSubs.flatMap((s) => s.refereeIds || [])])
+    )
+    col('fixtures').update(f._id, { refereeIds: ids })
+    return hydrateFixture(col('fixtures').findOne(f._id))
+  },
+
+  /** 修改团体对阵预计时间 / 场地（影响导出对阵表） */
+  updateFixtureSchedule(data = {}, ctx) {
+    needAdmin(ctx)
+    const id = data.fixtureId || data.id
+    if (!id) fail('缺少对阵 id')
+    const f = col('fixtures').findOne(id)
+    if (!f) fail('对阵不存在')
+    const patch = {}
+    if (data.venue !== undefined) patch.venue = String(data.venue || '').trim()
+    if (data.scheduleTime !== undefined) {
+      const t = data.scheduleTime ? new Date(data.scheduleTime) : null
+      if (data.scheduleTime && (!t || Number.isNaN(t.getTime()))) fail('预计时间格式不正确')
+      patch.scheduleTime = data.scheduleTime ? t.toISOString() : ''
+    }
+    if (!Object.keys(patch).length) fail('无更新内容')
+    col('fixtures').update(id, patch)
+
+    // 可选：同步平移各小项时间
+    if (patch.scheduleTime && data.syncSubTimes) {
+      const match = col('matches').findOne(f.matchId)
+      const gap = Math.max(0, Number(match?.itemIntervalMinutes) || 0)
+      const base = new Date(patch.scheduleTime).getTime()
+      const subs = col('sub_fixtures')
+        .find((s) => s.fixtureId === id)
+        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+      subs.forEach((s, idx) => {
+        col('sub_fixtures').update(s._id, {
+          scheduleTime: new Date(base + idx * gap * 60000).toISOString()
+        })
+      })
+    }
+    return hydrateFixture(col('fixtures').findOne(id))
+  },
+
+  listScheduleSlots({ matchId } = {}, ctx) {
+    needAdmin(ctx)
+    if (!matchId) fail('缺少比赛 id')
+    return col('schedule_slots')
+      .find((s) => s.matchId === matchId)
+      .sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')))
+  },
+
+  saveScheduleSlot(data = {}, ctx) {
+    needAdmin(ctx)
+    const matchId = data.matchId
+    const match = col('matches').findOne(matchId)
+    if (!match || match.deleted) fail('比赛不存在')
+    const name = String(data.name || '').trim()
+    if (!name) fail('请填写时段名称')
+    const startTime = String(data.startTime || '').trim()
+    const endTime = String(data.endTime || '').trim()
+    if (!startTime || !endTime) fail('请填写开始和结束时间')
+    const courtCount = Math.max(1, Number(match.courtCount) || 8)
+    const courtNos = (Array.isArray(data.courtNos) ? data.courtNos : [])
+      .map((n) => Number(n))
+      .filter((n) => n >= 1 && n <= courtCount)
+    if (!courtNos.length) fail('请至少选择一片场地')
+    const assignments = []
+    const usedCourt = new Set()
+    const usedSub = new Set()
+    for (const a of Array.isArray(data.assignments) ? data.assignments : []) {
+      const courtNo = Number(a?.courtNo) || 0
+      const subFixtureId = String(a?.subFixtureId || '').trim()
+      if (!courtNo || !subFixtureId) continue
+      if (!courtNos.includes(courtNo)) fail(`${courtNo} 号场地未在本时段选用`)
+      if (usedCourt.has(courtNo)) fail(`${courtNo} 号场地在本时段重复安排`)
+      if (usedSub.has(subFixtureId)) fail('同一局不能同时安排到多片场地')
+      const sub = col('sub_fixtures').findOne(subFixtureId)
+      if (!sub) fail('对局不存在')
+      const f = col('fixtures').findOne(sub.fixtureId)
+      if (!f || f.matchId !== matchId) fail('对局不属于本场比赛')
+      if (sub.slotId && data.id && sub.slotId !== data.id) fail(`${sub.code || '该局'} 已排在其他时段`)
+      if (sub.slotId && !data.id) fail(`${sub.code || '该局'} 已排在其他时段`)
+      usedCourt.add(courtNo)
+      usedSub.add(subFixtureId)
+      assignments.push({ courtNo, subFixtureId, code: sub.code || '' })
+    }
+    if (!assignments.length) fail('请为场地选择对局编号')
+    const date = String(data.date || match.startDate || '').slice(0, 10)
+    const fields = { matchId, name, date, startTime, endTime, courtNos, assignments }
+    const clearOld = (slot) => {
+      for (const a of slot?.assignments || []) {
+        const sub = col('sub_fixtures').findOne(a.subFixtureId)
+        if (!sub) continue
+        if (sub.slotId && slot._id && sub.slotId !== slot._id) continue
+        col('sub_fixtures').update(sub._id, { venue: '', scheduleTime: '', slotId: '', courtNo: 0 })
+      }
+    }
+    let slot
+    if (data.id) {
+      const old = col('schedule_slots').findOne(data.id)
+      if (!old || old.matchId !== matchId) fail('时段不存在')
+      clearOld(old)
+      slot = col('schedule_slots').update(data.id, fields)
+    } else {
+      slot = col('schedule_slots').insert({ _id: nid('ss_'), ...fields, createdAt: nowIso() })
+    }
+    const when = slotDateTime(date, startTime)
+    for (const a of assignments) {
+      col('sub_fixtures').update(a.subFixtureId, {
+        venue: `${a.courtNo}号`,
+        scheduleTime: when,
+        slotId: slot._id,
+        courtNo: a.courtNo
+      })
+    }
+    return slot
+  },
+
+  deleteScheduleSlot({ id, slotId } = {}, ctx) {
+    needAdmin(ctx)
+    const sid = id || slotId
+    const slot = col('schedule_slots').findOne(sid)
+    if (!slot) fail('时段不存在')
+    for (const a of slot.assignments || []) {
+      const sub = col('sub_fixtures').findOne(a.subFixtureId)
+      if (!sub) continue
+      if (sub.slotId && sub.slotId !== slot._id) continue
+      col('sub_fixtures').update(sub._id, { venue: '', scheduleTime: '', slotId: '', courtNo: 0 })
+    }
+    col('schedule_slots').removeWhere((s) => s._id === sid)
+    return { ok: true }
+  },
+
+  listAssignableGames({ matchId } = {}, ctx) {
+    needAdmin(ctx)
+    if (!matchId) fail('缺少比赛 id')
+    const fixtures = col('fixtures')
+      .find((f) => f.matchId === matchId)
+      .map((f) => hydrateFixture(f))
+      .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')))
+    const games = []
+    for (const f of fixtures) {
+      for (const s of f.subFixtures || []) {
+        games.push({
+          _id: s._id,
+          code: s.code || '',
+          itemName: s.itemName,
+          venue: s.venue || '',
+          scheduleTime: s.scheduleTime || '',
+          slotId: s.slotId || '',
+          courtNo: s.courtNo || 0,
+          fixtureId: f._id,
+          fixtureCode: f.code,
+          round: f.round,
+          teamAName: f.teamAName,
+          teamBName: f.teamBName
+        })
+      }
+    }
+    const match = col('matches').findOne(matchId)
+    return { matchNo: match?.matchNo || '', games }
+  },
+
+  /** 导出纸质对阵表所需数据 */
+  getBracketTable(matchId, ctx) {
+    const user = resolveCtx(ctx).user
+    if (isGuestUser(user)) fail('请登录后查看')
+    if (!canViewMatch(matchId, user)) fail('无权查看对阵')
+    const match = hydrateMatch(col('matches').findOne(matchId))
+    if (!match || match.deleted) fail('比赛不存在')
+    const teams = col('teams')
+      .find((t) => t.matchId === matchId)
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    const fixtures = col('fixtures').find((f) => f.matchId === matchId).map(hydrateFixture)
+    return { match, teams, fixtures }
   },
 
   applySpectator({ matchId, reason }, ctx) {
@@ -1191,7 +1891,8 @@ export const service = {
     const sub = col('sub_fixtures').findOne(id)
     if (!sub) fail('场次不存在')
     const f = col('fixtures').findOne(sub.fixtureId)
-    if (!(isAdmin(u) || (f.refereeIds || []).includes(u._id))) fail('仅被指派的裁判或管理员可记分')
+    if (!canRefereeFixture(u, f, sub)) fail('仅被指派的裁判或管理员可记分')
+    if (!sub.lineupASubmitted || !sub.lineupBSubmitted) fail('双方上场名单均提交后才能开始')
     if (sub.status === 'pending') {
       col('sub_fixtures').update(id, { status: 'live' })
       col('fixtures').update(f._id, { status: 'live' })
@@ -1200,12 +1901,166 @@ export const service = {
   },
 
   getSubFixture(id, ctx) {
+    const user = resolveCtx(ctx).user
     const sub = col('sub_fixtures').findOne(id)
     if (!sub) fail('场次不存在')
-    const f = hydrateFixture(col('fixtures').findOne(sub.fixtureId))
+    const f = hydrateFixture(col('fixtures').findOne(sub.fixtureId), user)
     const match = hydrateMatch(col('matches').findOne(f.matchId))
     const item = col('match_items').findOne(sub.itemId)
-    return { ...sub, fixture: f, match, item }
+    const both = !!sub.lineupASubmitted && !!sub.lineupBSubmitted
+    const canShowA = both || f.viewerOnA
+    const canShowB = both || f.viewerOnB
+    return {
+      ...sub,
+      itemName: item?.name || '单项',
+      refereeNames: (sub.refereeIds || []).map(userName).filter(Boolean).join('、'),
+      playerAIds: canShowA ? sub.playerAIds || [] : [],
+      playerBIds: canShowB ? sub.playerBIds || [] : [],
+      playersA: canShowA ? sub.playersA || [] : [],
+      playersB: canShowB ? sub.playersB || [] : [],
+      lineupBothReady: both,
+      fixture: f,
+      match,
+      item
+    }
+  },
+
+  /**
+   * 提交小项上场名单
+   * side: 'a' | 'b'
+   * playerIds: 队员 members[].id
+   */
+  submitSubLineup(data = {}, ctx) {
+    const u = needUser(ctx)
+    const subId = data.subFixtureId || data.id
+    const side = data.side === 'b' ? 'b' : 'a'
+    const playerIds = Array.isArray(data.playerIds) ? data.playerIds.filter(Boolean) : []
+    if (!subId) fail('缺少小项 id')
+
+    const sub = col('sub_fixtures').findOne(subId)
+    if (!sub) fail('小项不存在')
+    const fixture = col('fixtures').findOne(sub.fixtureId)
+    if (!fixture) fail('对阵不存在')
+    const match = col('matches').findOne(fixture.matchId)
+    if (!match) fail('比赛不存在')
+    const item = col('match_items').findOne(sub.itemId)
+    if (!item) fail('比赛项目不存在')
+
+    const team = col('teams').findOne(side === 'a' ? fixture.teamAId : fixture.teamBId)
+    if (!team) fail('队伍不存在')
+    if (!canSubmitLineupForTeam(u, team)) fail('仅本队队长或管理员可提交上场名单')
+
+    const need = Number(item.memberCount) || 1
+    if (playerIds.length !== need) fail(`${item.name} 需要选择 ${need} 名队员`)
+
+    const roster = activeMembers(team)
+    const picked = playerIds.map((id) => {
+      const m = roster.find((x) => x.id === id)
+      if (!m) fail('只能选择本队已报名的有效队员')
+      return m
+    })
+    if (new Set(playerIds).size !== playerIds.length) fail('队员不可重复选择')
+
+    const genderNeed = itemGenderNeed(item.name)
+    if (genderNeed.total > 0) {
+      const male = picked.filter((m) => m.gender !== 'female').length
+      const female = picked.filter((m) => m.gender === 'female').length
+      if (male !== genderNeed.male || female !== genderNeed.female) {
+        fail(`${item.name} 需要男 ${genderNeed.male} / 女 ${genderNeed.female}`)
+      }
+    }
+
+    // 兼项：汇总本队在本场团体赛各小项名单（含本次）
+    const allSubs = col('sub_fixtures').find((s) => s.fixtureId === fixture._id)
+    const teamSubs = allSubs.map((s) => {
+      const isCurrent = s._id === subId
+      let ids = []
+      if (isCurrent) ids = playerIds
+      else if (side === 'a' && s.lineupASubmitted) ids = s.playerAIds || []
+      else if (side === 'b' && s.lineupBSubmitted) ids = s.playerBIds || []
+      const members = ids
+        .map((id) => roster.find((m) => m.id === id) || (isCurrent ? picked.find((m) => m.id === id) : null))
+        .filter(Boolean)
+      return { subId: s._id, members }
+    })
+    const err = validateTeamConcurrent(match, teamSubs)
+    if (err) fail(err)
+
+    const snapshot = picked.map((m) => ({
+      id: m.id,
+      userId: m.userId || '',
+      name: m.name,
+      gender: m.gender === 'female' ? 'female' : 'male'
+    }))
+
+    if (side === 'a') {
+      col('sub_fixtures').update(subId, {
+        playerAIds: playerIds,
+        playersA: snapshot,
+        lineupASubmitted: true,
+        lineupASubmittedAt: nowIso(),
+        lineupABy: u._id
+      })
+    } else {
+      col('sub_fixtures').update(subId, {
+        playerBIds: playerIds,
+        playersB: snapshot,
+        lineupBSubmitted: true,
+        lineupBSubmittedAt: nowIso(),
+        lineupBBy: u._id
+      })
+    }
+
+    const next = col('sub_fixtures').findOne(subId)
+    if (next.lineupASubmitted && next.lineupBSubmitted) {
+      pushNotify(fixture.teamAId ? col('teams').findOne(fixture.teamAId)?.captainId : '', '双方名单已齐', `${item.name} 双方上场名单已提交`, {
+        fixtureId: fixture._id,
+        subFixtureId: subId
+      })
+      pushNotify(col('teams').findOne(fixture.teamBId)?.captainId, '双方名单已齐', `${item.name} 双方上场名单已提交`, {
+        fixtureId: fixture._id,
+        subFixtureId: subId
+      })
+      ;(next.refereeIds || fixture.refereeIds || []).forEach((rid) => {
+        pushNotify(rid, '可开始执裁', `${teamName(fixture.teamAId)} vs ${teamName(fixture.teamBId)} · ${item.name}`, {
+          fixtureId: fixture._id,
+          subFixtureId: subId
+        })
+      })
+    }
+
+    return hydrateFixture(fixture, u)
+  },
+
+  /** 撤回本方上场名单（双方未齐前可改） */
+  clearSubLineup(data = {}, ctx) {
+    const u = needUser(ctx)
+    const subId = data.subFixtureId || data.id
+    const side = data.side === 'b' ? 'b' : 'a'
+    const sub = col('sub_fixtures').findOne(subId)
+    if (!sub) fail('小项不存在')
+    if (['live', 'finished', 'confirmed'].includes(sub.status)) fail('比赛已开始，无法撤回名单')
+    const fixture = col('fixtures').findOne(sub.fixtureId)
+    const team = col('teams').findOne(side === 'a' ? fixture.teamAId : fixture.teamBId)
+    if (!canSubmitLineupForTeam(u, team)) fail('无权撤回')
+    if (side === 'a') {
+      col('sub_fixtures').update(subId, {
+        playerAIds: [],
+        playersA: [],
+        lineupASubmitted: false,
+        lineupASubmittedAt: '',
+        lineupABy: ''
+      })
+    } else {
+      col('sub_fixtures').update(subId, {
+        playerBIds: [],
+        playersB: [],
+        lineupBSubmitted: false,
+        lineupBSubmittedAt: '',
+        lineupBBy: ''
+      })
+    }
+    return hydrateFixture(fixture, u)
   },
 
   addPoint({ subFixtureId, side }, ctx) {
@@ -1213,11 +2068,14 @@ export const service = {
     const sub = col('sub_fixtures').findOne(subFixtureId)
     if (!sub) fail('场次不存在')
     const f = col('fixtures').findOne(sub.fixtureId)
-    if (!(isAdmin(u) || (f.refereeIds || []).includes(u._id))) fail('无权记分')
+    if (!canRefereeFixture(u, f, sub)) fail('无权记分')
     const match = col('matches').findOne(f.matchId)
     const rule = match.scoring || { points: 21, capPoints: 30, deuceMargin: 2 }
     if (['finished', 'confirmed'].includes(sub.status)) fail('本场已结束')
-    if (sub.status === 'pending') col('sub_fixtures').update(subFixtureId, { status: 'live' })
+    if (sub.status === 'pending') {
+      if (!sub.lineupASubmitted || !sub.lineupBSubmitted) fail('双方上场名单均提交后才能记分')
+      col('sub_fixtures').update(subFixtureId, { status: 'live' })
+    }
     const sets = [...(sub.sets || [{ aScore: 0, bScore: 0, winner: '' }])]
     let idx = sets.findIndex((s) => !s.winner)
     if (idx < 0) {
@@ -1264,7 +2122,7 @@ export const service = {
     if (!last) fail('暂无上一步记录')
     const sub = col('sub_fixtures').findOne(subFixtureId)
     const f = col('fixtures').findOne(sub.fixtureId)
-    if (!(isAdmin(u) || (f.refereeIds || []).includes(u._id))) fail('无权撤销')
+    if (!canRefereeFixture(u, f, sub)) fail('无权撤销')
     const sets = JSON.parse(JSON.stringify(sub.sets || []))
     let idx = sets.length - 1
     while (idx >= 0 && sets[idx].aScore === 0 && sets[idx].bScore === 0 && !sets[idx].winner) {
@@ -1290,7 +2148,7 @@ export const service = {
     const u = needUser(ctx)
     const sub = col('sub_fixtures').findOne(id)
     const f = col('fixtures').findOne(sub.fixtureId)
-    if (!(isAdmin(u) || (f.refereeIds || []).includes(u._id))) fail('无权确认')
+    if (!canRefereeFixture(u, f, sub)) fail('无权确认')
     if (sub.status !== 'finished') fail('比赛尚未结束')
     col('sub_fixtures').update(id, { status: 'confirmed' })
     refreshFixtureResult(f._id)
@@ -1318,15 +2176,50 @@ export const service = {
     }
   },
 
-  listReferees() {
-    return col('users').find((u) => (u.roles || []).includes('referee') || (u.roles || []).includes('super_admin'))
+  listReferees(data) {
+    const matchId = typeof data === 'string' ? data : data?.matchId
+    let list = col('users').find(
+      (u) =>
+        !u.deleted &&
+        ((u.roles || []).includes('referee') ||
+          (u.roles || []).includes('super_admin') ||
+          (u.roles || []).includes('admin'))
+    )
+    if (matchId) {
+      const match = col('matches').findOne(matchId)
+      const pool = new Set(match?.refereeIds || [])
+      list = list.filter((u) => pool.has(u._id))
+    }
+    return list
   },
 
   myRefereeFixtures(payload, ctx) {
     const u = needUser(resolveCtx(payload, ctx))
+    const uid = u._id
+    const matchIds = new Set(
+      col('matches')
+        .find((m) => m && !m.deleted && (m.refereeIds || []).includes(uid))
+        .map((m) => m._id)
+    )
+    const subFixtureIds = new Set(
+      col('sub_fixtures')
+        .find((s) => (s.refereeIds || []).includes(uid))
+        .map((s) => s.fixtureId)
+    )
     return col('fixtures')
-      .find((f) => (f.refereeIds || []).includes(u._id))
-      .map(hydrateFixture)
+      .find(
+        (f) =>
+          matchIds.has(f.matchId) || (f.refereeIds || []).includes(uid) || subFixtureIds.has(f._id)
+      )
+      .map((f) => {
+        const h = hydrateFixture(f)
+        if (matchIds.has(f.matchId)) {
+          h.mySubFixtures = h.subFixtures || []
+        } else {
+          h.mySubFixtures = (h.subFixtures || []).filter((s) => (s.refereeIds || []).includes(uid))
+        }
+        return h
+      })
   },
 
   listTeams(matchId) {
@@ -1334,7 +2227,7 @@ export const service = {
       .find((t) => t.matchId === matchId)
       .map((t) => ({
         ...t,
-        captainName: userName(t.captainId),
+        captainName: teamCaptainName(t),
         activeCount: activeMembers(t).length
       }))
   },

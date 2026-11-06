@@ -4,7 +4,12 @@
       <template #right>↩ 撤销</template>
     </hg-nav>
     <view v-if="sub" class="score-header">
-      <view class="setinfo">{{ sub.item?.name }} · {{ sub.fixture?.venue }} · 第 {{ sub.currentSet }} 局</view>
+      <view class="setinfo">{{ sub.itemName || sub.item?.name }} · 场地 {{ sub.venue || sub.fixture?.venue || '待定' }} · 第 {{ sub.currentSet }} 局</view>
+      <view class="players" v-if="sub.lineupBothReady">
+        <text>{{ (sub.playersA || []).map((p) => p.name).join('/') || '—' }}</text>
+        <text class="vs">vs</text>
+        <text>{{ (sub.playersB || []).map((p) => p.name).join('/') || '—' }}</text>
+      </view>
       <view class="teams">
         <text class="tn">{{ sub.fixture?.teamAName }}</text>
         <text class="cs">{{ setA }}<text class="col">:</text>{{ setB }}</text>
@@ -161,6 +166,19 @@ onUnload(() => clearInterval(timer))
 .setinfo {
   font-size: 24rpx;
   opacity: 0.85;
+}
+.players {
+  margin-top: 12rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 24rpx;
+  opacity: 0.95;
+}
+.players .vs {
+  opacity: 0.7;
+  font-size: 22rpx;
 }
 .teams {
   display: flex;

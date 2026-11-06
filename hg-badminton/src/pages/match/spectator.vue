@@ -2,7 +2,7 @@
   <view class="page">
     <hg-nav title="申请观众" />
     <view class="pad">
-      <view class="rule-box">非参赛者需申请观众权限，管理员审批通过后可查看对阵与赛果。</view>
+      <view class="rule-box">非本场裁判、队长或队员需申请观众权限，管理员审批通过后可查看对阵与赛果。超级管理员/管理员无需申请即可查看。</view>
       <view class="field">
         <text class="field-label">申请说明</text>
         <textarea class="textarea" v-model="reason" placeholder="如：想观摩学习赛制" />

@@ -43,8 +43,16 @@
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "比赛管理" }
     },
     {
+      "path": "pages/match/bracket-export",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "导出对阵表" }
+    },
+    {
       "path": "pages/match/team",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "队伍报名" }
+    },
+    {
+      "path": "pages/match/team-admin",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "录入队伍" }
     },
     {
       "path": "pages/match/join",
@@ -63,12 +71,20 @@
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "观众审核" }
     },
     {
+      "path": "pages/match/schedule",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "对阵排期" }
+    },
+    {
       "path": "pages/fixture/index",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "对阵表" }
     },
     {
       "path": "pages/fixture/detail",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "对阵详情" }
+    },
+    {
+      "path": "pages/fixture/lineup",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "上场名单" }
     },
     {
       "path": "pages/fixture/score",
@@ -91,8 +107,20 @@
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "我执裁的场次" }
     },
     {
+      "path": "pages/mine/web-login",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "网页后台登录" }
+    },
+    {
       "path": "pages/mine/settings",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "设置" }
+    },
+    {
+      "path": "pages/admin/login",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "管理后台登录" }
+    },
+    {
+      "path": "pages/admin/index",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "管理后台" }
     },
     {
       "path": "pages/mine/notify",
@@ -104,7 +132,9 @@
     "navigationBarTitleText": "追光羽毛球",
     "navigationBarBackgroundColor": "#FFFFFF",
     "backgroundColor": "#F3F6F9",
-    "navigationStyle": "custom"
+    "navigationStyle": "custom",
+    "rpxCalcMaxDeviceWidth": 375,
+    "rpxCalcBaseDeviceWidth": 375
   },
   "tabBar": {
     "color": "#8B95A3",

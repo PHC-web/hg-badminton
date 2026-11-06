@@ -57,6 +57,29 @@ export function activityStatus(s) {
   return statusMeta(ACTIVITY_STATUS, s)
 }
 
+function timeMs(value) {
+  if (!value) return NaN
+  const t = new Date(value).getTime()
+  return Number.isNaN(t) ? NaN : t
+}
+
+/** 展示用状态：报名截止、活动结束后覆盖库里的 open */
+export function activityDisplayStatus(a) {
+  if (!a || typeof a !== 'object') return activityStatus(a)
+  const base = activityStatus(a.status)
+  if (a.status && a.status !== 'open') return base
+  const now = Date.now()
+  const end = timeMs(a.endTime || a.startTime)
+  if (!Number.isNaN(end) && now > end) {
+    return { key: 'finished', label: '已结束', chip: 'gray' }
+  }
+  const regEnd = timeMs(a.registerEnd)
+  if (!Number.isNaN(regEnd) && now > regEnd) {
+    return { key: 'reg_ended', label: '已结束报名', chip: 'gray' }
+  }
+  return base
+}
+
 export function regStatus(s) {
   return statusMeta(REG_STATUS, s)
 }

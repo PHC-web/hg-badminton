@@ -1,0 +1,21 @@
+{
+  "bsonType": "object",
+  "required": ["status"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": { "description": "网页登录票据（同时作为小程序码 scene）" },
+    "status": { "bsonType": "string", "description": "pending | approved" },
+    "userId": { "bsonType": "string" },
+    "consumed": { "bsonType": "bool" },
+    "createdAt": {},
+    "expireAt": { "bsonType": "long" },
+    "confirmedAt": {},
+    "consumedAt": {}
+  }
+}

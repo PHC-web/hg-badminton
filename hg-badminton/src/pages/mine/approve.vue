@@ -4,6 +4,8 @@
     <view class="pad">
       <view class="rule-box">审核通过时必须选择组别；已设置的默认组别会自动勾选，可改选。</view>
 
+      <hg-loading v-if="loading && !list.length" />
+
       <view v-for="u in list" :key="u._id" class="card item">
         <view class="row top">
           <hg-avatar :name="u.realName || u.nickname" :src="u.avatar" />
@@ -34,7 +36,7 @@
         </view>
       </view>
 
-      <hg-empty v-if="!list.length" text="暂无待审核成员" />
+      <hg-empty v-if="!list.length && !loading" text="暂无待审核成员" />
     </view>
   </view>
 </template>
@@ -47,23 +49,29 @@ import { maskPhone, toast, confirm } from '@/utils/format'
 
 const list = ref([])
 const groups = ref([])
+const loading = ref(false)
 const selected = reactive({})
 const defaultGroupId = ref('')
 
 async function load() {
-  const [pending, gs, def] = await Promise.all([
-    api.listPendingUsers(),
-    api.listGroups(),
-    api.getDefaultGroup()
-  ])
-  groups.value = gs || []
-  defaultGroupId.value = def?._id || gs?.find((g) => g.isDefault)?._id || ''
-  list.value = pending || []
-  list.value.forEach((u) => {
-    if (!selected[u._id]) {
-      selected[u._id] = defaultGroupId.value ? [defaultGroupId.value] : []
-    }
-  })
+  loading.value = true
+  try {
+    const [pending, gs, def] = await Promise.all([
+      api.listPendingUsers(),
+      api.listGroups(),
+      api.getDefaultGroup()
+    ])
+    groups.value = gs || []
+    defaultGroupId.value = def?._id || gs?.find((g) => g.isDefault)?._id || ''
+    list.value = pending || []
+    list.value.forEach((u) => {
+      if (!selected[u._id]) {
+        selected[u._id] = defaultGroupId.value ? [defaultGroupId.value] : []
+      }
+    })
+  } finally {
+    loading.value = false
+  }
 }
 
 function toggle(userId, gid) {

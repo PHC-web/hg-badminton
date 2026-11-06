@@ -1,0 +1,23 @@
+{
+  "bsonType": "object",
+  "required": ["matchId", "name"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": { "description": "时段 ID" },
+    "matchId": { "bsonType": "string", "description": "比赛 ID" },
+    "name": { "bsonType": "string", "description": "时段名称，如 第1轮" },
+    "date": { "bsonType": "string", "description": "日期 YYYY-MM-DD" },
+    "startTime": { "bsonType": "string", "description": "开始 HH:mm" },
+    "endTime": { "bsonType": "string", "description": "结束 HH:mm" },
+    "courtNos": { "bsonType": "array", "description": "选用场地号" },
+    "assignments": { "bsonType": "array", "description": "场地-对局 { courtNo, subFixtureId, code }" },
+    "createdAt": {},
+    "updatedAt": {}
+  }
+}

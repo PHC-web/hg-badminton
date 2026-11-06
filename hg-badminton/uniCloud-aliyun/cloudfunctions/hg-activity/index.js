@@ -5,7 +5,7 @@
  */
 
 const core = require('hg-core')
-const { db, fail, nid, nowIso, getUser, needUser, createHandler } = require('hg-shared')
+const { db, fail, nid, nowIso, getUser, needUser, createHandler, toTs } = require('hg-shared')
 
 async function needAdmin(userId) {
   const u = await needUser(userId)
@@ -305,8 +305,8 @@ const actions = {
     if (!activity || activity.deleted) fail('活动不存在')
     if (activity.status !== 'open') fail('当前不可报名')
     const now = Date.now()
-    if (activity.registerStart && now < new Date(activity.registerStart).getTime()) fail('报名尚未开始')
-    if (activity.registerEnd && now > new Date(activity.registerEnd).getTime()) fail('报名已结束')
+    if (activity.registerStart && now < toTs(activity.registerStart)) fail('报名尚未开始')
+    if (activity.registerEnd && now > toTs(activity.registerEnd)) fail('报名已结束')
     if (!canRegisterActivity(activity, u)) fail('您所在组别不可报名本活动')
 
     const name = data.name || u.realName || u.nickname
@@ -357,7 +357,7 @@ const actions = {
     const { data: rows } = await db.collection('activities').doc(activityId).get()
     const activity = rows[0]
     if (!activity) fail('活动不存在')
-    if (activity.registerEnd && Date.now() > new Date(activity.registerEnd).getTime()) {
+    if (activity.registerEnd && Date.now() > toTs(activity.registerEnd)) {
       fail('报名已结束，无法取消')
     }
     let reg = null

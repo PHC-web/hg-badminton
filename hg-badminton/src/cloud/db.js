@@ -12,7 +12,9 @@ const COLLECTIONS = [
   'fixtures',
   'sub_fixtures',
   'score_logs',
-  'match_spectators'
+  'match_spectators',
+  'web_login_tickets',
+  'schedule_slots'
 ]
 
 function empty() {

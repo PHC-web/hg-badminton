@@ -70,12 +70,32 @@ export const DEFAULT_ITEMS = [
   { name: '混双', memberCount: 2 }
 ]
 
+/** 团体赛兼项默认规则 */
+export const DEFAULT_CONCURRENT = {
+  enabled: false,
+  allowMale: false,
+  allowFemale: false,
+  maxMalePeople: 0,
+  maxFemalePeople: 0,
+  maxMaleItems: 1,
+  maxFemaleItems: 1
+}
+
 export const DB_KEY = 'hg_badminton_db_v2'
 export const USER_KEY = 'hg_badminton_user'
 export const SELECTED_MATCH_KEY = 'hg_selected_match'
+/** @deprecated 改用 DATA_MODE_KEY + USE_LOCAL_SIM */
 export const USE_CLOUD_KEY = 'hg_use_unicloud'
+/**
+ * 编译期强制本地全模拟（true 时忽略 storage，全部走本地）
+ * 日常上线请保持 false；需要本地调试时改为 true 或在设置页切换
+ */
+export const USE_LOCAL_SIM = false
+/** 运行时数据模式：'cloud' | 'local' */
+export const DATA_MODE_KEY = 'hg_data_mode'
 export const ACTIVITY_TEMPLATE_KEY = 'hg_activity_templates'
 export const LOCAL_MIGRATED_KEY = 'hg_local_migrated_v1'
+export const LOCAL_MATCH_MIGRATED_KEY = 'hg_local_match_migrated_v1'
 
 /** 日常活动发布默认预设 */
 export const ACTIVITY_PRESET = {

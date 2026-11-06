@@ -1,11 +1,23 @@
 {
   "bsonType": "object",
-  "required": ["matchId", "name", "captainId"],
+  "required": ["matchId", "name"],
   "permission": {
     "read": false,
     "create": false,
     "update": false,
     "delete": false,
     "count": false
+  },
+  "properties": {
+    "_id": { "description": "队伍 ID" },
+    "matchId": { "bsonType": "string" },
+    "name": { "bsonType": "string" },
+    "department": { "bsonType": "string" },
+    "slogan": { "bsonType": "string" },
+    "captainId": { "bsonType": "string", "description": "可为空（管理员代建未指定队长）" },
+    "captainName": { "bsonType": "string" },
+    "captainPhone": { "bsonType": "string" },
+    "members": { "bsonType": "array" },
+    "createdAt": {}
   }
 }

@@ -17,9 +17,29 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+/**
+ * 云端时间解析：云函数运行在 UTC 时区，客户端提交的
+ * "YYYY-MM-DDTHH:mm(:ss)" 是北京时间（无时区标记），
+ * 直接 new Date() 会被按 UTC 解析、整体偏移 8 小时。
+ * 这里统一把无时区的日期时间串按 +08:00 解析。
+ */
+const NAIVE_DT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/
+
+function toTs(value) {
+  if (value == null || value === '') return NaN
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'number') return value
+  let s = String(value).trim()
+  if (NAIVE_DT_RE.test(s)) {
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s += ':00'
+    return new Date(`${s}+08:00`).getTime()
+  }
+  return new Date(s).getTime()
+}
+
 function publicUser(u) {
   if (!u) return null
-  const { sessionKey, ...rest } = u
+  const { sessionKey, passwordHash, passwordSalt, ...rest } = u
   return rest
 }
 
@@ -79,6 +99,7 @@ module.exports = {
   fail,
   nid,
   nowIso,
+  toTs,
   publicUser,
   getUser,
   getUserByOpenid,

@@ -11,6 +11,7 @@
     </view>
     <view class="pad">
       <view class="section-title">活动列表</view>
+      <hg-loading v-if="loading && !list.length" />
       <view v-for="a in list" :key="a._id" class="card item" @click="open(a)">
         <view class="row top">
           <view class="title">{{ a.name }}</view>
@@ -25,7 +26,7 @@
           <text class="enter">查看详情 ›</text>
         </view>
       </view>
-      <hg-empty v-if="!list.length" text="暂无活动" />
+      <hg-empty v-if="!list.length && !loading" text="暂无活动" />
     </view>
   </view>
 </template>
@@ -35,11 +36,12 @@ import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
-import { activityStatus, formatDate } from '@/utils/format'
+import { activityDisplayStatus, formatDate } from '@/utils/format'
 import { requireLogin, guardAppAccess } from '@/utils/nav'
 
 const user = useUserStore()
 const list = ref([])
+const loading = ref(false)
 const bar = uni.getSystemInfoSync().statusBarHeight || 0
 const greet = computed(() => {
   if (user.isGuest) return '游客'
@@ -47,7 +49,7 @@ const greet = computed(() => {
 })
 
 function st(a) {
-  return activityStatus(a.status)
+  return activityDisplayStatus(a)
 }
 function time(a) {
   return formatDate(a.startTime, true)
@@ -58,7 +60,12 @@ async function load() {
   if (user.loggedIn && user.needPhone) {
     toastPhone()
   }
-  list.value = await api.listActivities({})
+  loading.value = true
+  try {
+    list.value = await api.listActivities({})
+  } finally {
+    loading.value = false
+  }
 }
 
 function toastPhone() {
