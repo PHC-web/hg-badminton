@@ -23,12 +23,12 @@ import { onShow } from '@dcloudio/uni-app'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useMatchStore } from '@/stores/match'
-import { requireLogin, guardAppAccess } from '@/utils/nav'
+import { belowCapsuleTop, requireLogin, guardAppAccess } from '@/utils/nav'
 
 const user = useUserStore()
 const store = useMatchStore()
 const list = ref([])
-const bar = uni.getSystemInfoSync().statusBarHeight || 0
+const heroTop = belowCapsuleTop()
 
 async function load() {
   if (!guardAppAccess()) return

@@ -40,8 +40,7 @@
       </view>
 
       <view style="margin-top: 24rpx;">
-        <view v-if="isGuest" class="rule-box">当前为演示数据，姓名和手机号已脱敏。报名需登录。</view>
-        <button v-if="isGuest && st.key === 'open'" class="btn-primary" style="margin-top: 16rpx;" @click="goReg">去报名</button>
+        <button v-if="isGuest && st.key === 'open'" class="btn-primary" @click="goReg">去报名</button>
         <button v-else-if="st.key === 'open' && a.myRegistration && a.myRegistration.status !== 'cancelled'" class="btn-danger" @click="cancel">取消报名</button>
         <button v-else-if="st.key === 'open' && a.canRegister" class="btn-primary" @click="goReg">去报名{{ a.remain ? '' : '（排队）' }}</button>
         <view v-else-if="st.key === 'open'" class="rule-box">当前不可报名</view>
