@@ -88,7 +88,10 @@
           <view class="info-meta">队伍 {{ m.teamCount }}/{{ m.maxTeams }} · 男限 {{ m.maxMalePerTeam }} / 女限 {{ m.maxFemalePerTeam }}</view>
           <view class="info-meta">报名截止 {{ formatDate(m.registerEnd, true) }}</view>
         </view>
-        <view v-if="user.isGuest" class="rule-box">游客仅可查看报名队伍，登录后可报名参赛。</view>
+        <view v-if="user.isGuest" class="rule-box">当前为演示数据，报名需登录。</view>
+        <view v-if="user.isGuest" class="row actions">
+          <button class="btn-primary" @click="goJoin">申请入队</button>
+        </view>
         <view v-else class="row actions">
           <button v-if="user.isAdmin" class="btn-ghost" @click="goTeamAdmin">录入全部队伍</button>
           <button v-if="user.isCaptain" class="btn-ghost" @click="goTeam">队伍报名</button>

@@ -323,6 +323,37 @@ const actions = {
     return publicUser(saved)
   },
 
+  async sendTestMail(data = {}, { userId }) {
+    const u = await needUser(userId)
+    if (!core.isSuper(u)) fail('需要超级管理员权限')
+    const email = String(data.email || '').trim()
+    if (!EMAIL_RE.test(email)) fail('请填写正确的通知邮箱')
+    const cfg = hgConfig.getMail()
+    if (!cfg.host || !cfg.user || !cfg.pass) fail('邮件发送服务未配置')
+    try {
+      await sendMail({
+        host: cfg.host,
+        port: cfg.port,
+        user: cfg.user,
+        pass: cfg.pass,
+        to: [email],
+        subject: '追光羽毛球：测试邮件',
+        text: [
+          '这是一封测试邮件。',
+          '如果收到，说明新成员待审核时可以通知到这个邮箱。',
+          '',
+          `收件邮箱：${email}`
+        ].join('\n')
+      })
+    } catch (e) {
+      const message = e && e.message ? e.message : ''
+      console.error('[mail] 测试邮件发送失败', message || e)
+      fail(message ? `测试邮件发送失败：${message}` : '测试邮件发送失败')
+    }
+    console.log('[mail] 测试邮件已发送')
+    return { ok: true }
+  },
+
   async addContact(contact = {}, { userId }) {
     const u = await needUser(userId)
     if (!contact.name || !contact.phone) fail('请填写姓名和手机号')

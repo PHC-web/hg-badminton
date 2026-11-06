@@ -4,6 +4,17 @@ import { getUniCloud, hasCloudClient, isHxCliCloudError, spaceMissingMessage } f
 import { USER_KEY, LOCAL_MIGRATED_KEY, LOCAL_MATCH_MIGRATED_KEY } from '@/utils/constants'
 import { getDataMode, isLocalSim, isCloudMode, setDataMode } from '@/utils/data-mode'
 import { isDevWebAdmin, withLocalWebToken } from '@/utils/web-env'
+import {
+  getGuestActivity,
+  getGuestActivityList,
+  getGuestFixture,
+  getGuestFixtures,
+  getGuestMatch,
+  getGuestMatchList,
+  getGuestResults,
+  GUEST_MATCH_ID
+} from '@/cloud/guest-catalog'
+import { promptGuestLogin } from '@/utils/guest-login'
 
 /**
  * 客户端方法 → 网关路由
@@ -17,6 +28,7 @@ const CLOUD_ROUTES = {
   confirmWebLogin: ['base', 'confirmWebLogin'],
   getProfile: ['base', 'getProfile'],
   updateProfile: ['base', 'updateProfile'],
+  sendTestMail: ['base', 'sendTestMail'],
   addContact: ['base', 'addContact'],
   listUsers: ['base', 'listUsers'],
   listPendingUsers: ['base', 'listPendingUsers'],
@@ -89,6 +101,50 @@ function ctx() {
   return { user: uni.getStorageSync(USER_KEY) || null }
 }
 
+function argId(data, keys = ['id']) {
+  if (typeof data === 'string' || typeof data === 'number') return String(data)
+  if (!data || typeof data !== 'object') return ''
+  for (const key of keys) {
+    if (data[key]) return String(data[key])
+  }
+  return ''
+}
+
+/** 游客只读演示数据，不访问云端 */
+const GUEST_READ = {
+  listActivities: () => getGuestActivityList(),
+  getActivity: (data) => {
+    const row = getGuestActivity(argId(data, ['id', 'activityId']))
+    if (!row) throw new Error('活动不存在')
+    return row
+  },
+  listMatches: () => getGuestMatchList(),
+  getMatch: (data) => {
+    const row = getGuestMatch(argId(data, ['id', 'matchId']))
+    if (!row) throw new Error('比赛不存在')
+    return row
+  },
+  listFixtures: (data) => {
+    const pack = getGuestFixtures(argId(data, ['matchId', 'id']) || GUEST_MATCH_ID)
+    if (!pack) throw new Error('无权查看对阵')
+    return { ...pack, rank: [], groups: [] }
+  },
+  getFixture: (data) => {
+    const row = getGuestFixture(argId(data, ['id', 'fixtureId']))
+    if (!row) throw new Error('对阵不存在')
+    return { ...row, match: getGuestMatch(GUEST_MATCH_ID) }
+  },
+  getResults: (data) => {
+    const pack = getGuestResults(argId(data, ['matchId', 'id']) || GUEST_MATCH_ID)
+    if (!pack) throw new Error('无权查看赛果')
+    return { ...pack, groups: [], fixtures: pack.latest || [] }
+  },
+  getMyStats: () => ({ activityCount: 0, matchCount: 0 }),
+  listNotifications: () => [],
+  listGroups: () => [],
+  getProfile: () => ctx().user
+}
+
 function cloudReady() {
   return hasCloudClient()
 }
@@ -157,6 +213,13 @@ async function callLocal(method, payload) {
 
 async function call(method, data) {
   const payload = data === undefined ? {} : data
+  const user = ctx().user
+  if (user?.isGuest) {
+    const read = GUEST_READ[method]
+    if (read) return read(payload)
+    promptGuestLogin()
+    throw new Error('请先登录')
+  }
 
   // —— 本地全模拟 ——
   if (isLocalSim()) {
@@ -187,16 +250,6 @@ async function call(method, data) {
 
   if (!cloudReady()) {
     const err = new Error(spaceMissingMessage())
-    toastErr(err)
-    throw err
-  }
-
-  const user = ctx().user
-  if (
-    user?.isGuest &&
-    !['wxLogin', 'webPasswordLogin', 'createWebLoginTicket', 'pollWebLoginTicket'].includes(method)
-  ) {
-    const err = new Error('请先微信登录')
     toastErr(err)
     throw err
   }
@@ -337,6 +390,7 @@ export const api = {
   confirmWebLogin: (d) => call('confirmWebLogin', d),
   getProfile: () => call('getProfile'),
   updateProfile: (d) => call('updateProfile', d),
+  sendTestMail: (d) => call('sendTestMail', d),
   addContact: (d) => call('addContact', d),
   listUsers: () => call('listUsers'),
   listPendingUsers: () => call('listPendingUsers'),

@@ -1,6 +1,6 @@
 {
   "name": "hg-badminton",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "追光羽毛球 — 羽毛球比赛管理小程序",
   "scripts": {
     "dev:custom": "uni -p",

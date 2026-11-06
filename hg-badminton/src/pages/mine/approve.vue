@@ -36,7 +36,7 @@
         </view>
       </view>
 
-      <hg-empty v-if="!list.length && !loading" text="暂无待审核成员" />
+      <hg-empty v-if="!list.length" text="暂无待审核成员" />
     </view>
   </view>
 </template>
@@ -49,29 +49,23 @@ import { maskPhone, toast, confirm } from '@/utils/format'
 
 const list = ref([])
 const groups = ref([])
-const loading = ref(false)
 const selected = reactive({})
 const defaultGroupId = ref('')
 
 async function load() {
-  loading.value = true
-  try {
-    const [pending, gs, def] = await Promise.all([
-      api.listPendingUsers(),
-      api.listGroups(),
-      api.getDefaultGroup()
-    ])
-    groups.value = gs || []
-    defaultGroupId.value = def?._id || gs?.find((g) => g.isDefault)?._id || ''
-    list.value = pending || []
-    list.value.forEach((u) => {
-      if (!selected[u._id]) {
-        selected[u._id] = defaultGroupId.value ? [defaultGroupId.value] : []
-      }
-    })
-  } finally {
-    loading.value = false
-  }
+  const [pending, gs, def] = await Promise.all([
+    api.listPendingUsers(),
+    api.listGroups(),
+    api.getDefaultGroup()
+  ])
+  groups.value = gs || []
+  defaultGroupId.value = def?._id || gs?.find((g) => g.isDefault)?._id || ''
+  list.value = pending || []
+  list.value.forEach((u) => {
+    if (!selected[u._id]) {
+      selected[u._id] = defaultGroupId.value ? [defaultGroupId.value] : []
+    }
+  })
 }
 
 function toggle(userId, gid) {

@@ -86,10 +86,6 @@ export const useUserStore = defineStore('user', {
       return u
     },
     enterGuest() {
-      if (!isLocalSim()) {
-        uni.showToast({ title: '云端模式请使用微信登录', icon: 'none' })
-        return null
-      }
       this.persist({ ...GUEST_PROFILE })
       return this.profile
     },

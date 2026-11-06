@@ -33,7 +33,10 @@
         </view>
         <view v-if="user.isSuper" class="field">
           <text class="field-label">通知邮箱</text>
-          <input class="input" v-model="form.email" placeholder="有新成员待审核时发到这里" />
+          <view class="email-row">
+            <input class="input email-input" v-model="form.email" placeholder="有新成员待审核时发到这里" />
+            <button class="email-test" :loading="testingMail" @click="sendTestMail">发送测试</button>
+          </view>
         </view>
         <button class="btn-primary" :loading="saving" @click="save">保存资料</button>
       </view>
@@ -75,9 +78,12 @@ import { uploadUserAvatar } from '@/utils/upload'
 import { USE_LOCAL_SIM } from '@/utils/constants'
 import { isDevEnv } from '@/utils/data-mode'
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 const user = useUserStore()
 const uploading = ref(false)
 const saving = ref(false)
+const testingMail = ref(false)
 const dataMode = ref(api.getDataMode())
 const devEnv = isDevEnv()
 const form = reactive({ realName: '', phone: '', department: '', avatar: '', email: '' })
@@ -172,7 +178,7 @@ async function save() {
     toast('手机号格式不正确')
     return
   }
-  if (user.isSuper && form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+  if (user.isSuper && form.email && !EMAIL_RE.test(form.email.trim())) {
     toast('邮箱格式不正确')
     return
   }
@@ -190,6 +196,24 @@ async function save() {
     toast('已保存', 'success')
   } finally {
     saving.value = false
+  }
+}
+
+async function sendTestMail() {
+  const email = form.email.trim()
+  if (!EMAIL_RE.test(email)) {
+    toast('请先填写正确的通知邮箱')
+    return
+  }
+  if (!(await confirm(`确定向 ${email} 发送测试邮件？`, '发送测试邮件'))) return
+  testingMail.value = true
+  try {
+    await api.sendTestMail({ email })
+    toast('测试邮件已发送', 'success')
+  } catch (e) {
+    /* 接口层已提示 */
+  } finally {
+    testingMail.value = false
   }
 }
 
@@ -287,6 +311,31 @@ function logout() {
   color: $hg-primary;
   background: $hg-primary-light;
   font-weight: 600;
+}
+.email-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.email-input {
+  flex: 1;
+  width: auto;
+}
+.email-test {
+  flex-shrink: 0;
+  margin: 0;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 28rpx;
+  border-radius: 20rpx;
+  background: $hg-primary-light;
+  color: $hg-primary-deep;
+  font-size: 26rpx;
+  font-weight: 600;
+  border: none;
+}
+.email-test::after {
+  border: none;
 }
 .ver {
   text-align: center;

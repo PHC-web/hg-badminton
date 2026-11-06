@@ -564,6 +564,10 @@ export const service = {
     return needUser(resolveCtx(payload, ctx))
   },
 
+  sendTestMail() {
+    fail('本地模式无法发送测试邮件')
+  },
+
   updateProfile(patch, ctx) {
     const u = needUser(ctx)
     if (patch.phone !== undefined && !patch.phone) fail('手机号不能为空')
@@ -595,6 +599,11 @@ export const service = {
       }
     }
     return col('users').update(u._id, next)
+  },
+
+  sendTestMail(_data, ctx) {
+    needUser(ctx)
+    fail('本地模式无法发送邮件')
   },
 
   listPendingUsers(payload, ctx) {

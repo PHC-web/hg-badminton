@@ -52,7 +52,7 @@ export function getGuestActivity(id) {
       }
     ],
     myRegistration: null,
-    canRegister: false
+    canRegister: true
   }
 }
 

@@ -1,5 +1,6 @@
 import { useUserStore } from '@/stores/user'
 import { toast } from '@/utils/format'
+import { promptGuestLogin } from '@/utils/guest-login'
 
 /** 自定义顶栏内容的上边距，避开微信右上角胶囊 */
 export function belowCapsuleTop() {
@@ -22,8 +23,7 @@ export function openMatch(id) {
 export function requireLogin(message = '登录后即可使用该功能') {
   const user = useUserStore()
   if (!user.loggedIn) {
-    toast(message)
-    uni.navigateTo({ url: '/pages/login/index' })
+    promptGuestLogin()
     return false
   }
   if (user.needProfile || user.needApproval) {

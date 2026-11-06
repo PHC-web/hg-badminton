@@ -17,7 +17,7 @@
         <button class="btn-login" :loading="loading" @click="doWxLogin">
           {{ localSim ? '本地模拟登录' : '微信一键登录' }}
         </button>
-        <button v-if="localSim" class="btn-guest" @click="enterGuest">游客模式</button>
+        <button class="btn-guest" @click="enterGuest">暂不登录</button>
         <view v-if="localSim" class="mode-tip">当前：本地全模拟（数据在本机）</view>
         <view v-else-if="devEnv" class="mode-tip" @click="toLocalSim">云端不可用？点此切到本地模拟</view>
       </view>
