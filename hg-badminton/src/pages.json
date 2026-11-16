@@ -35,6 +35,10 @@
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "活动报名" }
     },
     {
+      "path": "pages/activity/poster",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "邀请海报" }
+    },
+    {
       "path": "pages/match/detail",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "比赛详情" }
     },
@@ -101,6 +105,10 @@
     {
       "path": "pages/mine/approve",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "成员审核" }
+    },
+    {
+      "path": "pages/mine/profile-review",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "资料修改审核" }
     },
     {
       "path": "pages/mine/referee",

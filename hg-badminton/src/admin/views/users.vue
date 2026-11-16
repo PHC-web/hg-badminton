@@ -1,4 +1,5 @@
 <template>
+  <template v-if="user.isSuper">
   <view class="h">待审核</view>
   <view class="card" v-for="u in pending" :key="u._id">
     <view class="who">{{ u.realName || u.nickname }} · {{ u.phone }} · {{ u.department || '未填部门' }}</view>
@@ -11,6 +12,20 @@
     </view>
   </view>
   <view v-if="!pending.length" class="empty">暂无待审用户</view>
+  </template>
+
+  <view class="h" style="margin-top: 28px;">资料修改待审</view>
+  <view class="card" v-for="item in changes" :key="item._id">
+    <view class="who">{{ item.userName || '未命名' }}</view>
+    <view class="s">姓名 {{ item.prevRealName || '未填' }} → {{ item.realName || '未填' }}</view>
+    <view class="s">手机号 {{ item.prevPhone || '未填' }} → {{ item.phone || '未填' }}</view>
+    <view class="s">部门 {{ item.prevDepartment || '未填' }} → {{ item.department || '未填' }}</view>
+    <view class="ops">
+      <text class="link danger" @click="rejectChange(item)">拒绝</text>
+      <text class="link" @click="passChange(item)">通过</text>
+    </view>
+  </view>
+  <view v-if="!changes.length" class="empty">暂无资料修改</view>
 
   <view class="h" style="margin-top: 28px;">全部用户</view>
   <view class="table">
@@ -36,19 +51,22 @@ import { confirm, roleLabel, toast } from '@/utils/format'
 
 const user = useUserStore()
 const pending = ref([])
+const changes = ref([])
 const list = ref([])
 const groups = ref([])
 const selected = reactive({})
 const defaultGroupId = ref('')
 
 async function load() {
-  const [p, us, gs, def] = await Promise.all([
-    api.listPendingUsers(),
+  const [p, us, gs, def, cs] = await Promise.all([
+    user.isSuper ? api.listPendingUsers() : Promise.resolve([]),
     api.listUsers(),
     api.listGroups(),
-    api.getDefaultGroup()
+    api.getDefaultGroup(),
+    api.listProfileChanges()
   ])
   pending.value = p || []
+  changes.value = cs || []
   list.value = us || []
   groups.value = gs || []
   defaultGroupId.value = def?._id || gs?.find((g) => g.isDefault)?._id || ''
@@ -73,6 +91,20 @@ async function pass(u) {
 async function reject(u) {
   if (!(await confirm(`拒绝「${u.realName || u.nickname}」？`))) return
   await api.approveUser({ userId: u._id, approved: false, reason: '未通过审核' })
+  toast('已拒绝')
+  load()
+}
+
+async function passChange(item) {
+  if (!(await confirm(`通过「${item.userName || '该成员'}」的资料修改？`))) return
+  await api.reviewProfileChange({ id: item._id, approved: true })
+  toast('已通过', 'success')
+  load()
+}
+
+async function rejectChange(item) {
+  if (!(await confirm(`拒绝「${item.userName || '该成员'}」的资料修改？`))) return
+  await api.reviewProfileChange({ id: item._id, approved: false, reason: '未通过审核' })
   toast('已拒绝')
   load()
 }

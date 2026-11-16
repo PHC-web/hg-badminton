@@ -2,10 +2,12 @@
 import { useUserStore } from '@/stores/user'
 import { useMatchStore } from '@/stores/match'
 import { api } from '@/api'
+import { captureInviteLaunch } from '@/utils/invite'
 
 export default {
-  onLaunch() {
+  onLaunch(options) {
     api.init()
+    captureInviteLaunch(options)
     const user = useUserStore()
     const match = useMatchStore()
     user.restore()

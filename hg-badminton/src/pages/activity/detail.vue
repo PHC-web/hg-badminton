@@ -40,6 +40,7 @@
       </view>
 
       <view style="margin-top: 24rpx;">
+        <button v-if="user.isAdmin" class="btn-ghost poster-btn" @click="openPoster">邀请海报</button>
         <button v-if="isGuest && st.key === 'open'" class="btn-primary" @click="goReg">去报名</button>
         <button v-else-if="st.key === 'open' && a.myRegistration && a.myRegistration.status !== 'cancelled'" class="btn-danger" @click="cancel">取消报名</button>
         <button v-else-if="st.key === 'open' && a.canRegister" class="btn-primary" @click="goReg">去报名{{ a.remain ? '' : '（排队）' }}</button>
@@ -70,6 +71,10 @@ async function load() {
 
 function goReg() {
   uni.navigateTo({ url: `/pages/activity/register?id=${id.value}` })
+}
+
+function openPoster() {
+  uni.navigateTo({ url: `/pages/activity/poster?id=${id.value}` })
 }
 
 async function cancel() {
@@ -105,4 +110,5 @@ onShow(() => { if (id.value) load() })
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 24rpx;
 }
+.poster-btn { margin-bottom: 16rpx; }
 </style>

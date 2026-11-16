@@ -72,6 +72,11 @@
           <view class="lt">成员审核</view>
           <view class="rs">待审新用户 ›</view>
         </view>
+        <view v-if="user.isAdmin" class="menu-item" @click="go('/pages/mine/profile-review')">
+          <view class="mi" style="background:#E7F6EE;">✎</view>
+          <view class="lt">资料修改审核</view>
+          <view class="rs">姓名 / 手机 / 部门 ›</view>
+        </view>
         <view v-if="user.isAdmin" class="menu-item" @click="go('/pages/mine/groups')">
           <view class="mi" style="background:#E8F3FB;">🚩</view>
           <view class="lt">组别管理</view>

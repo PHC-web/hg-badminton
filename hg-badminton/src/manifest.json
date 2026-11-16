@@ -36,6 +36,9 @@
         "permission" : {
             "scope.userLocation" : {
                 "desc" : "用于选择和查看比赛举办地点"
+            },
+            "scope.writePhotosAlbum" : {
+                "desc" : "用于把活动邀请海报保存到相册"
             }
         },
         "requiredPrivateInfos" : [ "getLocation", "chooseLocation" ]

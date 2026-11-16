@@ -1,0 +1,20 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "activityId"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": { "description": "滑块验证 id" },
+    "userId": { "bsonType": "string" },
+    "activityId": { "bsonType": "string" },
+    "targetX": { "bsonType": "int", "description": "缺口左边缘，单位像素" },
+    "createdAt": { "bsonType": "long" },
+    "expireAt": { "bsonType": "long" },
+    "used": { "bsonType": "bool" }
+  }
+}

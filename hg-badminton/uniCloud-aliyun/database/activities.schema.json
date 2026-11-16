@@ -19,6 +19,7 @@
     "maxCount": { "bsonType": "int", "description": "报名人数上限" },
     "allowGroupIds": { "bsonType": "array", "description": "可报名组别" },
     "notice": { "bsonType": "string" },
+    "inviteOnly": { "bsonType": "bool", "description": "邀请制：不出现在日常活动列表" },
     "status": { "bsonType": "string", "description": "draft / open / closed / finished" },
     "creatorId": { "bsonType": "string" },
     "createdAt": {},

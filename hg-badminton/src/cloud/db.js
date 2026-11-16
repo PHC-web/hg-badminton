@@ -14,7 +14,9 @@ const COLLECTIONS = [
   'score_logs',
   'match_spectators',
   'web_login_tickets',
-  'schedule_slots'
+  'schedule_slots',
+  'register_challenges',
+  'profile_changes'
 ]
 
 function empty() {

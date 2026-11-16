@@ -69,6 +69,7 @@ import { useMatchStore } from '@/stores/match'
 import { toast } from '@/utils/format'
 import { isDevEnv, isLocalSim, setDataMode } from '@/utils/data-mode'
 import { api } from '@/api'
+import { takeInviteReturn } from '@/utils/invite'
 
 const sys = uni.getSystemInfoSync()
 const bar = sys.statusBarHeight || 0
@@ -86,6 +87,11 @@ const rejectReason = computed(
 )
 
 function goHome() {
+  const inviteId = takeInviteReturn()
+  if (inviteId) {
+    uni.reLaunch({ url: `/pages/activity/register?id=${encodeURIComponent(inviteId)}&from=invite` })
+    return
+  }
   uni.switchTab({ url: '/pages/activity/index' })
 }
 

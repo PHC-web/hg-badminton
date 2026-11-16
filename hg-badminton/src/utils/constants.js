@@ -94,6 +94,7 @@ export const USE_LOCAL_SIM = false
 /** 运行时数据模式：'cloud' | 'local' */
 export const DATA_MODE_KEY = 'hg_data_mode'
 export const ACTIVITY_TEMPLATE_KEY = 'hg_activity_templates'
+export const INVITE_RETURN_KEY = 'hg_invite_return'
 export const LOCAL_MIGRATED_KEY = 'hg_local_migrated_v1'
 export const LOCAL_MATCH_MIGRATED_KEY = 'hg_local_match_migrated_v1'
 

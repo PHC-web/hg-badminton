@@ -9,10 +9,11 @@
         <text class="c1">活动</text><text class="c2">时间 / 地点</text><text class="c3">人数</text><text class="c4">操作</text>
       </view>
       <view class="tr" v-for="a in list" :key="a._id">
-        <text class="c1">{{ a.name }}</text>
+        <text class="c1">{{ a.name }}<text v-if="a.inviteOnly"> · 邀请制</text></text>
         <text class="c2">{{ formatDate(a.startTime, true) }} · {{ a.location }}</text>
         <text class="c3">{{ a.confirmedCount || 0 }}/{{ a.maxCount }}</text>
         <view class="c4 ops">
+          <text class="link" @click="openPoster(a)">邀请海报</text>
           <text class="link" @click="startEdit(a)">修改</text>
           <text class="link danger" @click="remove(a)">删除</text>
         </view>
@@ -51,6 +52,7 @@
       <view class="chips">
         <text v-for="g in groups" :key="g._id" class="chip" :class="{ on: form.allowGroupIds.includes(g._id) }" @click="toggle(g._id)">{{ g.name }}</text>
       </view>
+      <label class="check"><input type="checkbox" v-model="form.inviteOnly" /> 是否邀请制（不出现在日常活动列表，通过邀请海报进入）</label>
       <label>须知</label>
       <textarea class="area" v-model="form.notice" />
       <button class="btn" :loading="saving" @click="submit">{{ editingId ? '保存修改' : '发布活动' }}</button>
@@ -82,7 +84,8 @@ const form = reactive({
   registerEndTime: '18:00',
   allowGroupIds: [],
   notice: '',
-  selfRegister: false
+  selfRegister: false,
+  inviteOnly: false
 })
 
 function pad(n) {
@@ -100,7 +103,7 @@ function toTime(iso, fb) {
 }
 
 async function load() {
-  const [acts, gs] = await Promise.all([api.listActivities({}), api.listGroups()])
+  const [acts, gs] = await Promise.all([api.listActivities({ manage: true }), api.listGroups()])
   list.value = acts || []
   groups.value = gs || []
 }
@@ -120,6 +123,7 @@ function reset() {
   form.allowGroupIds = []
   form.notice = ACTIVITY_PRESET.notice
   form.selfRegister = false
+  form.inviteOnly = false
 }
 
 function startCreate() {
@@ -142,12 +146,17 @@ function startEdit(a) {
   form.registerEndTime = toTime(a.registerEnd, '18:00')
   form.allowGroupIds = [...(a.allowGroupIds || [])]
   form.notice = a.notice || ''
+  form.inviteOnly = !!a.inviteOnly
   mode.value = 'form'
 }
 
 function cancel() {
   mode.value = 'list'
   editingId.value = ''
+}
+
+function openPoster(a) {
+  uni.navigateTo({ url: `/pages/activity/poster?id=${a._id}` })
 }
 
 function toggle(id) {
@@ -167,7 +176,8 @@ function payload() {
     maxCount: Number(form.maxCount),
     allowGroupIds: [...form.allowGroupIds],
     notice: form.notice || '',
-    selfRegister: false
+    selfRegister: false,
+    inviteOnly: !!form.inviteOnly
   }
 }
 
@@ -217,4 +227,5 @@ label { display: block; font-size: 15px; color: #3d4a57; margin: 12px 0 6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { padding: 6px 12px; border: 1px solid #c5d0db; border-radius: 999px; font-size: 15px; color: #1a2332; }
 .chip.on { border-color: #006db8; color: #006db8; background: #e8f3fb; }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
 </style>

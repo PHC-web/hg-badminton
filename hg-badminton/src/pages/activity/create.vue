@@ -10,7 +10,7 @@
       <view v-if="!editingId && !showForm">
         <view v-for="a in list" :key="a._id" class="card item">
           <view class="row top">
-            <view class="title">{{ a.name }}</view>
+            <view class="title">{{ a.name }}<text v-if="a.inviteOnly" class="invite-tag">邀请制</text></view>
             <hg-chip :text="st(a).label" :type="st(a).chip" />
           </view>
           <view class="meta">📅 {{ time(a) }}　📍 {{ a.location }}</view>
@@ -19,6 +19,7 @@
           </view>
           <view class="ops">
             <text class="link" @click="openDetail(a)">详情</text>
+            <text class="link" @click="openPoster(a)">邀请海报</text>
             <text class="link" @click="startEdit(a)">修改</text>
             <text class="link danger" @click="remove(a)">删除</text>
           </view>
@@ -110,6 +111,14 @@
           <textarea class="textarea notice" v-model="form.notice" placeholder="活动注意事项…" />
         </view>
 
+        <view class="check-row" @click="form.inviteOnly = !form.inviteOnly">
+          <view class="check" :class="{ on: form.inviteOnly }" />
+          <view class="check-txt">
+            <text class="check-title">是否邀请制</text>
+            <text class="check-desc">选择后不出现在日常活动列表，参与者通过邀请海报进入</text>
+          </view>
+        </view>
+
         <view v-if="!editingId" class="check-row" @click="form.selfRegister = !form.selfRegister">
           <view class="check" :class="{ on: form.selfRegister }" />
           <view class="check-txt">
@@ -156,7 +165,8 @@ const form = reactive({
   registerEndTime: '18:00',
   allowGroupIds: [],
   notice: '',
-  selfRegister: true
+  selfRegister: true,
+  inviteOnly: false
 })
 
 function pad(n) {
@@ -228,6 +238,7 @@ function applyPresetDefaults() {
   form.allowGroupIds = []
   form.notice = ACTIVITY_PRESET.notice
   form.selfRegister = true
+  form.inviteOnly = false
   activeTplName.value = ''
   applyScheduleDefaults()
 }
@@ -246,7 +257,7 @@ function time(a) {
 async function load() {
   loading.value = true
   try {
-    const [acts, gs] = await Promise.all([api.listActivities({}), api.listGroups()])
+    const [acts, gs] = await Promise.all([api.listActivities({ manage: true }), api.listGroups()])
     list.value = acts || []
     groups.value = gs || []
     loadTemplates()
@@ -267,6 +278,10 @@ function goGroups() {
 
 function openDetail(a) {
   uni.navigateTo({ url: `/pages/activity/detail?id=${a._id}` })
+}
+
+function openPoster(a) {
+  uni.navigateTo({ url: `/pages/activity/poster?id=${a._id}` })
 }
 
 function startCreate() {
@@ -291,6 +306,7 @@ function startEdit(a) {
   form.registerEndTime = toTimeInput(a.registerEnd, ACTIVITY_PRESET.registerEndTime)
   form.allowGroupIds = [...(a.allowGroupIds || [])]
   form.notice = a.notice || ''
+  form.inviteOnly = !!a.inviteOnly
 }
 
 function cancelForm() {
@@ -310,7 +326,8 @@ function staticSnapshot() {
     maxCount: Number(form.maxCount) || ACTIVITY_PRESET.maxCount,
     allowGroupIds: [...form.allowGroupIds],
     notice: form.notice || '',
-    selfRegister: !!form.selfRegister
+    selfRegister: !!form.selfRegister,
+    inviteOnly: !!form.inviteOnly
   }
 }
 
@@ -321,6 +338,7 @@ function applyTemplate(tpl) {
   form.allowGroupIds = [...(tpl.allowGroupIds || [])]
   form.notice = tpl.notice || ACTIVITY_PRESET.notice
   form.selfRegister = tpl.selfRegister !== false
+  form.inviteOnly = !!tpl.inviteOnly
   activeTplName.value = tpl.title || '未命名模板'
   // 套用模板：静态字段来自模板，时间字段按「当前 → 下一周二」重新计算
   applyScheduleDefaults({
@@ -380,7 +398,8 @@ function payload() {
     maxCount: Number(form.maxCount),
     allowGroupIds: [...form.allowGroupIds],
     notice: form.notice || '',
-    selfRegister: !!form.selfRegister
+    selfRegister: !!form.selfRegister,
+    inviteOnly: !!form.inviteOnly
   }
 }
 
@@ -445,6 +464,16 @@ onShow(() => {
   font-weight: 700;
   flex: 1;
   padding-right: 12rpx;
+}
+.invite-tag {
+  margin-left: 12rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  background: #e8f3fb;
+  color: $hg-primary;
+  font-size: 20rpx;
+  font-weight: 600;
+  vertical-align: 4rpx;
 }
 .meta {
   font-size: 24rpx;

@@ -66,6 +66,178 @@ function formatMailTime(value) {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`
 }
 
+function normPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (digits.length < 11) return ''
+  return digits.slice(-11)
+}
+
+function identityOf(user) {
+  return {
+    realName: String(user?.realName || '').trim(),
+    phone: normPhone(user?.phone),
+    department: String(user?.department || '').trim()
+  }
+}
+
+function sameIdentity(a, b) {
+  return a.realName === b.realName && a.phone === b.phone && a.department === b.department
+}
+
+function publicChange(row) {
+  if (!row) return null
+  return {
+    _id: row._id,
+    userId: row.userId,
+    realName: row.realName || '',
+    phone: row.phone || '',
+    department: row.department || '',
+    prevRealName: row.prevRealName || '',
+    prevPhone: row.prevPhone || '',
+    prevDepartment: row.prevDepartment || '',
+    status: row.status,
+    reason: row.reason || '',
+    createdAt: row.createdAt || '',
+    updatedAt: row.updatedAt || ''
+  }
+}
+
+async function findPendingProfileChange(userId) {
+  if (!userId) return null
+  try {
+    const { data } = await db.collection('profile_changes').where({ userId, status: 'pending' }).limit(20).get()
+    return (data || []).sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))[0] || null
+  } catch (e) {
+    return null
+  }
+}
+
+async function attachProfileChange(user) {
+  const pub = publicUser(user)
+  pub.profileChange = publicChange(await findPendingProfileChange(user._id))
+  return pub
+}
+
+async function assertPhoneFree(phone, exceptUserId) {
+  const target = normPhone(phone)
+  if (!/^1\d{10}$/.test(target)) fail('手机号格式不正确')
+  const { data } = await db.collection('users').limit(500).get()
+  const hit = (data || []).find((item) => item && !item.deleted && item._id !== exceptUserId && normPhone(item.phone) === target)
+  if (hit) fail('该手机号已被其他账号使用')
+  try {
+    const { data: pending } = await db.collection('profile_changes').where({ status: 'pending' }).limit(200).get()
+    const other = (pending || []).find((row) => row.userId !== exceptUserId && normPhone(row.phone) === target)
+    if (other) fail('该手机号已有待审核的修改')
+  } catch (e) {
+    /* 审核表尚未建立时不拦截 */
+  }
+}
+
+async function pushNotify(userId, title, content, extra) {
+  if (!userId) return
+  try {
+    await db.collection('notifications').add({
+      _id: nid('n_'),
+      userId,
+      title,
+      content,
+      extra: extra || {},
+      read: false,
+      createdAt: nowIso()
+    })
+  } catch (e) {
+    console.error('[notify]', e && e.message ? e.message : e)
+  }
+}
+
+function changeText(prev, next) {
+  return [
+    `姓名：${prev.realName || '未填'} → ${next.realName || '未填'}`,
+    `手机号：${prev.phone || '未填'} → ${next.phone || '未填'}`,
+    `部门：${prev.department || '未填'} → ${next.department || '未填'}`
+  ].join('\n')
+}
+
+async function notifyProfileChange(applicant, prev, next) {
+  const name = prev.realName || applicant.nickname || '成员'
+  const text = changeText(prev, next)
+  const { data } = await db.collection('users').limit(300).get()
+  const admins = (data || []).filter((item) => item && !item.deleted && core.isAdmin(item) && item._id !== applicant._id)
+  await Promise.all(
+    admins.map((admin) =>
+      pushNotify(admin._id, '资料修改待审核', `${name} 申请修改资料。\n${text}`, {
+        type: 'profile_change',
+        userId: applicant._id
+      })
+    )
+  )
+  await pushNotify(applicant._id, '资料修改已提交', '姓名、手机号和部门已提交审核，通过后才会生效。', {
+    type: 'profile_change_submitted'
+  })
+  try {
+    const cfg = hgConfig.getMail()
+    if (!cfg.host || !cfg.user || !cfg.pass) return
+    const emails = new Set((cfg.adminEmails || []).map((item) => String(item).trim().toLowerCase()))
+    admins.forEach((admin) => {
+      const email = String(admin.email || '').trim().toLowerCase()
+      if (EMAIL_RE.test(email)) emails.add(email)
+    })
+    const to = [...emails].filter((item) => EMAIL_RE.test(item))
+    if (!to.length) return
+    await sendMail({
+      host: cfg.host,
+      port: cfg.port,
+      user: cfg.user,
+      pass: cfg.pass,
+      to,
+      subject: '追光羽毛球：有成员申请修改资料',
+      text: [`${name} 申请修改个人资料，等待审核。`, '', text, '', '请打开小程序「我的 → 资料修改审核」处理。'].join('\n')
+    })
+  } catch (e) {
+    console.error('[mail] 资料修改通知发送失败', e && e.message ? e.message : e)
+  }
+}
+
+async function saveProfileChange(user, prev, next) {
+  const existing = await findPendingProfileChange(user._id)
+  const pendingIdentity = existing
+    ? {
+        realName: String(existing.realName || '').trim(),
+        phone: normPhone(existing.phone),
+        department: String(existing.department || '').trim()
+      }
+    : null
+  if (pendingIdentity && sameIdentity(pendingIdentity, next)) return 'pending'
+  const now = nowIso()
+  const doc = {
+    userId: user._id,
+    realName: next.realName,
+    phone: next.phone,
+    department: next.department,
+    prevRealName: prev.realName,
+    prevPhone: prev.phone,
+    prevDepartment: prev.department,
+    status: 'pending',
+    reason: '',
+    reviewerId: '',
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  }
+  try {
+    if (existing) await db.collection('profile_changes').doc(existing._id).update(doc)
+    else await db.collection('profile_changes').add({ _id: nid('pc_'), ...doc })
+  } catch (e) {
+    console.error('[profile-change]', e && e.message ? e.message : e)
+    fail('资料修改提交失败，请稍后重试')
+  }
+  try {
+    await notifyProfileChange(user, prev, next)
+  } catch (e) {
+    console.error('[profile-change-notify]', e && e.message ? e.message : e)
+  }
+  return 'queued'
+}
+
 async function notifyPendingReview(applicant) {
   try {
     const cfg = hgConfig.getMail()
@@ -157,7 +329,7 @@ async function getAccessToken() {
   return tokenCache.token
 }
 
-async function makeWxacode(scene, envVersion = 'release') {
+async function makeWxacode(scene, envVersion = 'release', page = 'pages/mine/web-login', width = 280) {
   const token = await getAccessToken()
   if (!token) return ''
   const res = await uniCloud.httpclient.request(
@@ -167,18 +339,21 @@ async function makeWxacode(scene, envVersion = 'release') {
       headers: { 'Content-Type': 'application/json' },
       content: JSON.stringify({
         scene,
-        page: 'pages/mine/web-login',
+        page,
         check_path: false,
         env_version: envVersion,
-        width: 280
+        width
       }),
       dataType: 'arraybuffer',
       timeout: 15000
     }
   )
   const buf = Buffer.from(res.data || [])
-  const peek = buf.slice(0, 80).toString('utf8')
-  if (peek.includes('errcode') || peek.includes('{')) return ''
+  const peek = buf.slice(0, 120).toString('utf8')
+  if (peek.includes('errcode') || peek.trim().startsWith('{')) {
+    console.error('[wxacode]', peek.slice(0, 200))
+    return ''
+  }
   return `data:image/png;base64,${buf.toString('base64')}`
 }
 
@@ -287,25 +462,43 @@ const actions = {
 
   async getProfile(_data, { userId }) {
     const u = await needUser(userId)
-    return publicUser(u)
+    return attachProfileChange(u)
   },
 
   async updateProfile(data = {}, { userId }) {
     const u = await needUser(userId)
-    if (data.phone !== undefined && !data.phone) fail('手机号不能为空')
-    if (data.phone && !/^1\d{10}$/.test(String(data.phone))) fail('手机号格式不正确')
-    if (data.submitForReview && !String(data.department ?? u.department ?? '').trim()) {
-      fail('请填写部门')
+    const nextIdentity = {
+      realName: String(data.realName ?? u.realName ?? '').trim(),
+      phone: data.phone !== undefined ? normPhone(data.phone) : normPhone(u.phone),
+      department: String(data.department ?? u.department ?? '').trim()
+    }
+    if (data.phone !== undefined) {
+      if (!nextIdentity.phone) fail('手机号不能为空')
+      if (!/^1\d{10}$/.test(nextIdentity.phone)) fail('手机号格式不正确')
+    }
+    if (data.submitForReview && !nextIdentity.department) fail('请填写部门')
+    if (data.submitForReview && !nextIdentity.realName) fail('请填写真实姓名')
+
+    const current = identityOf(u)
+    const identityChanged = !sameIdentity(current, nextIdentity)
+    let profileReview = ''
+    if (!data.submitForReview && identityChanged) {
+      if (!nextIdentity.realName) fail('请填写真实姓名')
+      await assertPhoneFree(nextIdentity.phone, u._id)
+      profileReview = await saveProfileChange(u, current, nextIdentity)
     }
 
+    const applyIdentity = !!data.submitForReview || !identityChanged
     const patch = {
-      nickname: data.nickname ?? u.nickname,
-      realName: data.realName ?? u.realName,
-      phone: data.phone ?? u.phone,
-      department: data.department ?? u.department,
       gender: data.gender ?? u.gender,
       avatar: data.avatar !== undefined ? data.avatar : u.avatar,
-      verified: !!(data.phone || u.phone)
+      verified: !!(nextIdentity.phone || u.phone)
+    }
+    if (applyIdentity) {
+      patch.nickname = data.nickname ?? u.nickname
+      patch.realName = nextIdentity.realName
+      patch.phone = nextIdentity.phone || u.phone
+      patch.department = nextIdentity.department
     }
     if (data.email !== undefined && core.isSuper(u)) {
       const email = String(data.email || '').trim()
@@ -326,9 +519,10 @@ const actions = {
     }
 
     await db.collection('users').doc(u._id).update(patch)
-    const saved = { ...u, ...patch }
+    const saved = await attachProfileChange({ ...u, ...patch })
     if (notifyReview) await notifyPendingReview(saved)
-    return publicUser(saved)
+    saved.profileReview = profileReview
+    return saved
   },
 
   async sendTestMail(data = {}, { userId }) {
@@ -648,6 +842,26 @@ const actions = {
     return { groups: count }
   },
 
+  async activityInviteCode(data = {}, { userId }) {
+    const u = await needUser(userId)
+    if (!core.isAdmin(u)) fail('需要管理员权限')
+    const activityId = String(data.activityId || '').trim()
+    if (!activityId || activityId.length > 32) fail('活动不存在')
+    const { data: rows } = await db.collection('activities').doc(activityId).get()
+    const activity = rows && rows[0]
+    if (!activity || activity.deleted) fail('活动不存在')
+    const envVersion = ['develop', 'trial', 'release'].includes(data.envVersion) ? data.envVersion : 'release'
+    const qrBase64 = await makeWxacode(activityId, envVersion, 'pages/activity/register', 430)
+    if (!qrBase64) fail('邀请海报生成失败，请稍后重试')
+    return {
+      qrBase64,
+      name: activity.name || '',
+      location: activity.location || '',
+      startTime: activity.startTime || '',
+      endTime: activity.endTime || ''
+    }
+  },
+
   async createWebLoginTicket(data = {}) {
     const ticketId = Math.random().toString(36).slice(2, 10)
     const expireAt = Date.now() + 5 * 60 * 1000
@@ -718,6 +932,89 @@ const actions = {
       status: 'approved',
       userId: u._id,
       confirmedAt: nowIso()
+    })
+    return { ok: true }
+  },
+
+  async listProfileChanges(_data, { userId }) {
+    const admin = await needUser(userId)
+    if (!core.isAdmin(admin)) fail('需要管理员权限')
+    let rows = []
+    try {
+      const { data } = await db.collection('profile_changes').where({ status: 'pending' }).limit(200).get()
+      rows = data || []
+    } catch (e) {
+      rows = []
+    }
+    const users = {}
+    for (const row of rows) {
+      if (!users[row.userId]) users[row.userId] = await getUser(row.userId)
+    }
+    return rows
+      .filter((row) => users[row.userId] && !users[row.userId].deleted)
+      .map((row) => {
+        const owner = users[row.userId]
+        return {
+          ...publicChange(row),
+          userName: owner.realName || owner.nickname || '',
+          avatar: owner.avatar || ''
+        }
+      })
+      .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))
+  },
+
+  async reviewProfileChange(data = {}, { userId }) {
+    const admin = await needUser(userId)
+    if (!core.isAdmin(admin)) fail('需要管理员权限')
+    const id = data.id || data.changeId
+    if (!id) fail('缺少审核记录')
+    let row = null
+    try {
+      const { data: rows } = await db.collection('profile_changes').doc(id).get()
+      row = rows[0] || null
+    } catch (e) {
+      row = null
+    }
+    if (!row || row.status !== 'pending') fail('该申请已处理')
+    if (row.userId === admin._id) fail('不能审核自己的资料修改')
+    const target = await getUser(row.userId)
+    if (!target || target.deleted) fail('用户不存在')
+    const now = nowIso()
+    if (data.approved === false) {
+      const reason = (data.reason || '').trim() || '未通过审核'
+      await db.collection('profile_changes').doc(id).update({
+        status: 'rejected',
+        reason,
+        reviewerId: admin._id,
+        reviewedAt: now
+      })
+      await pushNotify(target._id, '资料修改未通过', `姓名、手机号或部门的修改未通过。${reason}`, {
+        type: 'profile_change_rejected'
+      })
+      return { ok: true }
+    }
+    await assertPhoneFree(row.phone, target._id)
+    const next = {
+      realName: String(row.realName || '').trim(),
+      phone: normPhone(row.phone),
+      department: String(row.department || '').trim()
+    }
+    if (!next.realName || !/^1\d{10}$/.test(next.phone)) fail('申请内容不完整')
+    await db.collection('users').doc(target._id).update({
+      realName: next.realName,
+      phone: next.phone,
+      department: next.department,
+      nickname: next.realName || target.nickname,
+      verified: true
+    })
+    await db.collection('profile_changes').doc(id).update({
+      status: 'approved',
+      reason: '',
+      reviewerId: admin._id,
+      reviewedAt: now
+    })
+    await pushNotify(target._id, '资料修改已通过', '姓名、手机号和部门已更新。', {
+      type: 'profile_change_approved'
     })
     return { ok: true }
   },

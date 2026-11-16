@@ -31,6 +31,13 @@
           <text class="field-label">部门</text>
           <input class="input" v-model="form.department" />
         </view>
+        <view v-if="pendingChange" class="review-box">
+          <view>资料修改审核中，通过后才会生效。</view>
+          <view class="review-line">姓名 {{ pendingChange.realName || '未填' }}</view>
+          <view class="review-line">手机号 {{ pendingChange.phone }}</view>
+          <view class="review-line">部门 {{ pendingChange.department || '未填' }}</view>
+        </view>
+        <view v-else class="review-hint">修改姓名、手机号或部门后，需管理员审核通过才会生效。</view>
         <view v-if="user.isSuper" class="field">
           <text class="field-label">通知邮箱</text>
           <view class="email-row">
@@ -89,6 +96,9 @@ const devEnv = isDevEnv()
 const form = reactive({ realName: '', phone: '', department: '', avatar: '', email: '' })
 
 const letter = computed(() => initial(form.realName || user.profile?.nickname || '我'))
+const pendingChange = computed(() =>
+  user.profile?.profileChange?.status === 'pending' ? user.profile.profileChange : null
+)
 const modeDesc = computed(() => {
   if (USE_LOCAL_SIM) return '编译期已强制本地（USE_LOCAL_SIM=true）'
   return dataMode.value === 'local'
@@ -96,8 +106,9 @@ const modeDesc = computed(() => {
     : '全部业务走 uniCloud，不写本地业务库'
 })
 
-onShow(() => {
+onShow(async () => {
   dataMode.value = api.getDataMode()
+  await user.refreshProfile()
   form.realName = user.profile?.realName || ''
   form.phone = user.profile?.phone || ''
   form.department = user.profile?.department || ''
@@ -183,6 +194,7 @@ async function save() {
     return
   }
   saving.value = true
+  const avatarChanged = (form.avatar || '') !== (user.profile?.avatar || '')
   try {
     const p = await api.updateProfile({
       realName: form.realName,
@@ -193,7 +205,18 @@ async function save() {
       email: user.isSuper ? form.email.trim() : undefined
     })
     user.persist(p)
-    toast('已保存', 'success')
+    form.realName = p.realName || ''
+    form.phone = p.phone || ''
+    form.department = p.department || ''
+    form.avatar = p.avatar || ''
+    form.email = p.email || ''
+    if (p.profileReview === 'queued') {
+      toast(avatarChanged ? '头像已保存，资料修改已提交审核' : '已提交审核，通过后才会生效', 'success')
+    } else if (p.profileReview === 'pending') {
+      toast('该修改已在审核中')
+    } else {
+      toast('已保存', 'success')
+    }
   } finally {
     saving.value = false
   }
@@ -336,6 +359,24 @@ function logout() {
 }
 .email-test::after {
   border: none;
+}
+.review-hint {
+  font-size: 22rpx;
+  color: $hg-text3;
+  line-height: 1.6;
+  margin: -8rpx 0 24rpx;
+}
+.review-box {
+  background: #fff6e8;
+  color: #8a5a12;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  margin-bottom: 24rpx;
+}
+.review-line {
+  margin-top: 4rpx;
 }
 .ver {
   text-align: center;

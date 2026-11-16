@@ -36,7 +36,7 @@ const stats = ref([
 
 onMounted(async () => {
   const [a, m, p] = await Promise.all([
-    api.listActivities({}).catch(() => []),
+    api.listActivities({ manage: true }).catch(() => []),
     api.listMatches({}).catch(() => []),
     api.listPendingUsers().catch(() => [])
   ])

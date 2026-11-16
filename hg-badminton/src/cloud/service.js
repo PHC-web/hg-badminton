@@ -26,6 +26,14 @@ import { judgeSetEnd, tallySets, judgeTeamWinner } from '@/utils/scoring'
 import { rankingFromFixtures, planRoundRobin } from '@/utils/fixture-gen'
 import { nextMatchNo, makeFixtureCode, makeGameCode, slotDateTime } from '@/utils/match-code'
 import { normalizeConcurrent, itemGenderNeed, validateTeamConcurrent } from '@/utils/concurrent'
+import {
+  renderSlider,
+  randomTargetX,
+  sliderMatches,
+  SLIDER_WIDTH,
+  SLIDER_HEIGHT,
+  SLIDER_PIECE
+} from '@/utils/slider-captcha'
 
 function fail(message) {
   const err = new Error(message)
@@ -279,9 +287,34 @@ function canSubmitLineupForTeam(user, team) {
   return false
 }
 
+function toTs(value) {
+  if (value == null || value === '') return NaN
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'number') return value
+  let s = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(s)) {
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s += ':00'
+    return new Date(`${s}+08:00`).getTime()
+  }
+  return new Date(s).getTime()
+}
+
+function registrationStarted(activity, now = Date.now()) {
+  if (!activity || !activity.registerStart) return true
+  const ts = toTs(activity.registerStart)
+  if (!Number.isFinite(ts)) return true
+  return now >= ts
+}
+
+function isListedReg(activity, reg, now = Date.now()) {
+  if (!reg || reg.status === 'cancelled') return false
+  if (!reg.inviteEarly) return true
+  return registrationStarted(activity, now)
+}
+
 function hydrateActivity(a) {
   if (!a) return null
-  const regs = col('activity_registrations').find((r) => r.activityId === a._id && r.status !== 'cancelled')
+  const regs = col('activity_registrations').find((r) => r.activityId === a._id && isListedReg(a, r))
   const confirmed = regs.filter((r) => r.status === 'confirmed')
   const queued = regs.filter((r) => r.status === 'queued')
   return {
@@ -389,6 +422,104 @@ function normPhone(phone) {
   return digits.slice(-11)
 }
 
+function identityOf(user) {
+  return {
+    realName: String(user?.realName || '').trim(),
+    phone: normPhone(user?.phone),
+    department: String(user?.department || '').trim()
+  }
+}
+
+function publicChange(row) {
+  if (!row) return null
+  return {
+    _id: row._id,
+    userId: row.userId,
+    realName: row.realName || '',
+    phone: row.phone || '',
+    department: row.department || '',
+    prevRealName: row.prevRealName || '',
+    prevPhone: row.prevPhone || '',
+    prevDepartment: row.prevDepartment || '',
+    status: row.status,
+    reason: row.reason || '',
+    createdAt: row.createdAt || '',
+    updatedAt: row.updatedAt || ''
+  }
+}
+
+function pendingProfileChange(userId) {
+  return (
+    col('profile_changes')
+      .find((row) => row.userId === userId && row.status === 'pending')
+      .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))[0] ||
+    null
+  )
+}
+
+function attachProfileChange(user, profileReview = '') {
+  const pending = pendingProfileChange(user._id)
+  return { ...user, profileChange: publicChange(pending), profileReview }
+}
+
+function assertPhoneFree(phone, exceptUserId) {
+  const target = normPhone(phone)
+  if (!/^1\d{10}$/.test(target)) fail('手机号格式不正确')
+  const hit = col('users').find((item) => item && !item.deleted && item._id !== exceptUserId && normPhone(item.phone) === target)[0]
+  if (hit) fail('该手机号已被其他账号使用')
+  const other = col('profile_changes').find(
+    (row) => row.status === 'pending' && row.userId !== exceptUserId && normPhone(row.phone) === target
+  )[0]
+  if (other) fail('该手机号已有待审核的修改')
+}
+
+function saveProfileChange(user, prev, next) {
+  const existing = pendingProfileChange(user._id)
+  const pendingIdentity = existing
+    ? {
+        realName: String(existing.realName || '').trim(),
+        phone: normPhone(existing.phone),
+        department: String(existing.department || '').trim()
+      }
+    : null
+  if (
+    pendingIdentity &&
+    pendingIdentity.realName === next.realName &&
+    pendingIdentity.phone === next.phone &&
+    pendingIdentity.department === next.department
+  ) {
+    return 'pending'
+  }
+  const now = nowIso()
+  const doc = {
+    userId: user._id,
+    realName: next.realName,
+    phone: next.phone,
+    department: next.department,
+    prevRealName: prev.realName,
+    prevPhone: prev.phone,
+    prevDepartment: prev.department,
+    status: 'pending',
+    reason: '',
+    reviewerId: '',
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  }
+  if (existing) col('profile_changes').update(existing._id, doc)
+  else col('profile_changes').insert({ _id: nid('pc_'), ...doc })
+  const name = prev.realName || user.nickname || '成员'
+  const text = `姓名：${prev.realName || '未填'} → ${next.realName || '未填'}；手机号：${prev.phone || '未填'} → ${next.phone || '未填'}；部门：${prev.department || '未填'} → ${next.department || '未填'}`
+  col('users')
+    .find((item) => item && !item.deleted && isAdmin(item) && item._id !== user._id)
+    .forEach((admin) =>
+      pushNotify(admin._id, '资料修改待审核', `${name} 申请修改资料。${text}`, { type: 'profile_change', userId: user._id })
+    )
+  pushNotify(user._id, '资料修改已提交', '姓名、手机号和部门已提交审核，通过后才会生效。', {
+    type: 'profile_change_submitted'
+  })
+  return 'queued'
+}
+
 function sameRegistrant(a, b) {
   if (a.userId && b.userId && a.userId === b.userId) return true
   const pa = normPhone(a.phone)
@@ -469,6 +600,17 @@ function promoteQueue(activityId) {
     type: 'queue_promoted'
   })
   return next
+}
+
+function consumeRegisterChallenge(userId, activityId, challengeId, sliderX) {
+  if (!challengeId) fail('请先完成滑块验证')
+  const row = col('register_challenges').findOne(challengeId)
+  const now = Date.now()
+  if (!row || row.used || row.userId !== userId || row.activityId !== activityId) fail('请重新完成滑块验证')
+  if (now > Number(row.expireAt)) fail('验证已过期，请重试')
+  if (now - Number(row.createdAt) < 200) fail('请拖动滑块对准缺口')
+  if (!sliderMatches(row.targetX, sliderX)) fail('请把滑块对准缺口')
+  col('register_challenges').update(challengeId, { used: true })
 }
 
 export const service = {
@@ -629,7 +771,7 @@ export const service = {
   },
 
   getProfile(payload, ctx) {
-    return needUser(resolveCtx(payload, ctx))
+    return attachProfileChange(needUser(resolveCtx(payload, ctx)))
   },
 
   sendTestMail() {
@@ -638,25 +780,47 @@ export const service = {
 
   updateProfile(patch, ctx) {
     const u = needUser(ctx)
-    if (patch.phone !== undefined && !patch.phone) fail('手机号不能为空')
-    if (patch.department !== undefined && patch.submitForReview && !String(patch.department || '').trim()) {
-      fail('请填写部门')
+    const nextIdentity = {
+      realName: String(patch.realName ?? u.realName ?? '').trim(),
+      phone: patch.phone !== undefined ? normPhone(patch.phone) : normPhone(u.phone),
+      department: String(patch.department ?? u.department ?? '').trim()
     }
+    if (patch.phone !== undefined) {
+      if (!nextIdentity.phone) fail('手机号不能为空')
+      if (!/^1\d{10}$/.test(nextIdentity.phone)) fail('手机号格式不正确')
+    }
+    if (patch.submitForReview && !nextIdentity.department) fail('请填写部门')
+    if (patch.submitForReview && !nextIdentity.realName) fail('请填写真实姓名')
+
+    const current = identityOf(u)
+    const identityChanged =
+      current.realName !== nextIdentity.realName ||
+      current.phone !== nextIdentity.phone ||
+      current.department !== nextIdentity.department
+    let profileReview = ''
+    if (!patch.submitForReview && identityChanged) {
+      if (!nextIdentity.realName) fail('请填写真实姓名')
+      assertPhoneFree(nextIdentity.phone, u._id)
+      profileReview = saveProfileChange(u, current, nextIdentity)
+    }
+
+    const applyIdentity = !!patch.submitForReview || !identityChanged
     const next = {
-      nickname: patch.nickname ?? u.nickname,
-      realName: patch.realName ?? u.realName,
-      phone: patch.phone ?? u.phone,
-      department: patch.department ?? u.department,
       gender: patch.gender ?? u.gender,
       avatar: patch.avatar !== undefined ? patch.avatar : u.avatar,
-      verified: !!(patch.phone || u.phone)
+      verified: !!(nextIdentity.phone || u.phone)
+    }
+    if (applyIdentity) {
+      next.nickname = patch.nickname ?? u.nickname
+      next.realName = nextIdentity.realName
+      next.phone = nextIdentity.phone || u.phone
+      next.department = nextIdentity.department
     }
     if (patch.email !== undefined && isSuper(u)) {
       const email = String(patch.email || '').trim()
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail('邮箱格式不正确')
       next.email = email
     }
-    // 首次完善资料 → 进入待审核（超管除外）
     if (patch.submitForReview && next.phone && next.realName) {
       if (isSuper(u) || u.approveStatus === 'approved') {
         next.approveStatus = 'approved'
@@ -666,7 +830,61 @@ export const service = {
         next.submittedAt = nowIso()
       }
     }
-    return col('users').update(u._id, next)
+    const saved = col('users').update(u._id, next)
+    return attachProfileChange(saved, profileReview)
+  },
+
+  listProfileChanges(_data, ctx) {
+    needAdmin(ctx)
+    return col('profile_changes')
+      .find((row) => row.status === 'pending')
+      .map((row) => {
+        const owner = col('users').findOne(row.userId)
+        if (!owner || owner.deleted) return null
+        return {
+          ...publicChange(row),
+          userName: owner.realName || owner.nickname || '',
+          avatar: owner.avatar || ''
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))
+  },
+
+  reviewProfileChange(data = {}, ctx) {
+    const admin = needAdmin(ctx)
+    const id = data.id || data.changeId
+    const row = col('profile_changes').findOne(id)
+    if (!row || row.status !== 'pending') fail('该申请已处理')
+    if (row.userId === admin._id) fail('不能审核自己的资料修改')
+    const target = col('users').findOne(row.userId)
+    if (!target || target.deleted) fail('用户不存在')
+    const now = nowIso()
+    if (data.approved === false) {
+      const reason = (data.reason || '').trim() || '未通过审核'
+      col('profile_changes').update(id, { status: 'rejected', reason, reviewerId: admin._id, reviewedAt: now })
+      pushNotify(target._id, '资料修改未通过', `姓名、手机号或部门的修改未通过。${reason}`, {
+        type: 'profile_change_rejected'
+      })
+      return { ok: true }
+    }
+    const next = {
+      realName: String(row.realName || '').trim(),
+      phone: normPhone(row.phone),
+      department: String(row.department || '').trim()
+    }
+    if (!next.realName || !/^1\d{10}$/.test(next.phone)) fail('申请内容不完整')
+    assertPhoneFree(next.phone, target._id)
+    col('users').update(target._id, {
+      realName: next.realName,
+      phone: next.phone,
+      department: next.department,
+      nickname: next.realName || target.nickname,
+      verified: true
+    })
+    col('profile_changes').update(id, { status: 'approved', reason: '', reviewerId: admin._id, reviewedAt: now })
+    pushNotify(target._id, '资料修改已通过', '姓名、手机号和部门已更新。', { type: 'profile_change_approved' })
+    return { ok: true }
   },
 
   sendTestMail(_data, ctx) {
@@ -874,6 +1092,7 @@ export const service = {
       .filter((a) => a && !a.deleted && a._id !== GUEST_ACTIVITY_ID && !a.guestOnly)
       .map(hydrateActivity)
     list = list.filter((a) => canSeeActivity(a, user))
+    if (!(query.manage && isAdmin(user))) list = list.filter((a) => !a.inviteOnly)
     if (query.status) list = list.filter((a) => a.status === query.status)
     if (query.keyword) list = list.filter((a) => a.name.includes(query.keyword))
     return list.sort((a, b) => (b.startTime || '').localeCompare(a.startTime || ''))
@@ -890,16 +1109,16 @@ export const service = {
     repairActivityRegistrations(id)
     const a = hydrateActivity(col('activities').findOne(id))
     if (!a || a.deleted || a.guestOnly) fail('活动不存在')
-    if (!canSeeActivity(a, user)) fail('活动不存在')
-    const regs = col('activity_registrations')
+    if (!canSeeActivity(a, user)) fail('暂不可报名')
+    const allRegs = col('activity_registrations')
       .find((r) => r.activityId === id && r.status !== 'cancelled')
       .sort((x, y) => {
         if (x.status !== y.status) return x.status === 'confirmed' ? -1 : 1
         return (x.createdAt || '').localeCompare(y.createdAt || '')
       })
-    a.registrations = regs
+    a.registrations = allRegs.filter((r) => isListedReg(a, r))
     a.myRegistration = user
-      ? regs.find(
+      ? allRegs.find(
           (r) => r.userId === user._id || (normPhone(r.phone) && normPhone(r.phone) === normPhone(user.phone))
         )
       : null
@@ -926,6 +1145,7 @@ export const service = {
       maxCount: Number(data.maxCount),
       allowGroupIds,
       notice: data.notice || '',
+      inviteOnly: !!data.inviteOnly,
       status: data.publish === false ? 'draft' : 'open',
       deleted: false,
       creatorId: creator._id,
@@ -983,6 +1203,7 @@ export const service = {
     delete data.myRegistration
     delete data.canRegister
     if (data.maxCount !== undefined) data.maxCount = Number(data.maxCount)
+    if (data.inviteOnly !== undefined) data.inviteOnly = !!data.inviteOnly
     return hydrateActivity(col('activities').update(id, data))
   },
 
@@ -999,24 +1220,21 @@ export const service = {
     const activity = col('activities').findOne(data.activityId)
     if (!activity || activity.deleted) fail('活动不存在')
     if (activity.status !== 'open') fail('当前不可报名')
+    const viaInvite = data.fromInvite === true || data.fromInvite === 'true' || data.fromInvite === 1
     const now = Date.now()
-    if (activity.registerStart && now < new Date(activity.registerStart).getTime()) fail('报名尚未开始')
-    if (activity.registerEnd && now > new Date(activity.registerEnd).getTime()) fail('报名已结束')
+    const startTs = activity.registerStart ? toTs(activity.registerStart) : NaN
+    if (!viaInvite && Number.isFinite(startTs) && now < startTs) fail('报名尚未开始')
+    if (activity.registerEnd && now > toTs(activity.registerEnd)) fail('报名已结束')
     if (!canRegisterActivity(activity, u)) fail('您所在组别不可报名本活动')
 
-    const name = String(data.name || u.realName || u.nickname || '').trim()
-    const phone = normPhone(data.phone || u.phone)
-    const department = data.department || u.department || ''
-    if (!name || !/^1\d{10}$/.test(phone)) fail('请填写姓名和正确的手机号')
-    if (data.isProxy && normPhone(u.phone) && phone === normPhone(u.phone)) fail('代报名不能填写本人手机号')
-
-    if (!data.isProxy) {
-      col('users').update(u._id, {
-        realName: u.realName || name,
-        department: department || u.department,
-        phone: u.phone || phone
-      })
-    }
+    const self = !data.isProxy
+    const name = self
+      ? String(u.realName || u.nickname || '').trim()
+      : String(data.name || '').trim()
+    const phone = normPhone(self ? u.phone : data.phone)
+    const department = self ? u.department || '' : data.department || ''
+    if (!name || !/^1\d{10}$/.test(phone)) fail(self ? '请先完善个人资料中的姓名和手机号' : '请填写姓名和正确的手机号')
+    if (!self && normPhone(u.phone) && phone === normPhone(u.phone)) fail('代报名不能填写本人手机号')
 
     repairActivityRegistrations(data.activityId)
     const active = col('activity_registrations').find(
@@ -1024,6 +1242,7 @@ export const service = {
     )
     if (active.some((r) => normPhone(r.phone) === phone)) fail('该手机号已报名或已在排队')
     if (!data.isProxy && active.some((r) => r.userId === u._id)) fail('您已报名或已在排队')
+    if (!viaInvite) consumeRegisterChallenge(u._id, data.activityId, data.challengeId, data.sliderX)
 
     if (data.isProxy && data.phone) {
       service.addContact({ name, phone, department }, { user: col('users').findOne(u._id) })
@@ -1041,6 +1260,7 @@ export const service = {
       department,
       isProxy: !!data.isProxy,
       proxyByUserId: data.isProxy ? u._id : '',
+      inviteEarly: !!(viaInvite && Number.isFinite(startTs) && now < startTs),
       status: full ? 'queued' : 'confirmed',
       queueNo: full ? queued.length + 1 : 0,
       createdAt: nowIso()
@@ -1050,6 +1270,39 @@ export const service = {
     const saved = col('activity_registrations').findOne(rec._id)
     if (!saved || saved.status === 'cancelled') fail('该手机号已报名或已在排队')
     return saved
+  },
+
+  createRegisterChallenge(data, ctx) {
+    const u = needUser(ctx)
+    const activity = col('activities').findOne(data.activityId)
+    if (!activity || activity.deleted || activity.status !== 'open') fail('当前不可报名')
+    if (!canRegisterActivity(activity, u)) fail('暂不可报名')
+    const targetX = randomTargetX()
+    const id = nid('rc_')
+    const now = Date.now()
+    col('register_challenges').insert({
+      _id: id,
+      userId: u._id,
+      activityId: data.activityId,
+      targetX,
+      createdAt: now,
+      expireAt: now + 2 * 60 * 1000,
+      used: false
+    })
+    const pic = renderSlider(targetX)
+    return {
+      challengeId: id,
+      image: pic.image,
+      pieceImage: pic.pieceImage,
+      width: SLIDER_WIDTH,
+      height: SLIDER_HEIGHT,
+      piece: SLIDER_PIECE
+    }
+  },
+
+  activityInviteCode(_data, ctx) {
+    needAdmin(ctx)
+    fail('本地模式无法生成微信二维码')
   },
 
   cancelActivityRegistration({ registrationId, activityId }, ctx) {

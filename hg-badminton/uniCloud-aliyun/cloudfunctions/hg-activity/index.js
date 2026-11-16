@@ -6,6 +6,7 @@
 
 const core = require('hg-core')
 const { db, fail, nid, nowIso, getUser, needUser, createHandler, toTs } = require('hg-shared')
+const { WIDTH, HEIGHT, PIECE, renderSlider, randomTargetX, sliderMatches } = require('./slider-captcha')
 
 async function needAdmin(userId) {
   const u = await needUser(userId)
@@ -125,9 +126,22 @@ async function regsOf(activityId) {
   }
 }
 
+function registrationStarted(activity, now = Date.now()) {
+  if (!activity || !activity.registerStart) return true
+  const ts = toTs(activity.registerStart)
+  if (!Number.isFinite(ts)) return true
+  return now >= ts
+}
+
+function isListedReg(activity, reg, now = Date.now()) {
+  if (!reg || reg.status === 'cancelled') return false
+  if (!reg.inviteEarly) return true
+  return registrationStarted(activity, now)
+}
+
 function hydrateActivity(a, allRegs = []) {
   if (!a) return null
-  const regs = allRegs.filter((r) => r.activityId === a._id && r.status !== 'cancelled')
+  const regs = allRegs.filter((r) => r.activityId === a._id && isListedReg(a, r))
   const confirmed = regs.filter((r) => r.status === 'confirmed')
   const queued = regs.filter((r) => r.status === 'queued')
   return {
@@ -188,6 +202,23 @@ async function setDoc(collection, id, fields) {
   const { _id, ...rest } = fields
   await db.collection(collection).doc(id).set(rest)
   return { _id: id, ...rest }
+}
+
+async function consumeRegisterChallenge(userId, activityId, challengeId, sliderX) {
+  if (!challengeId) fail('请先完成滑块验证')
+  let row = null
+  try {
+    const { data } = await db.collection('register_challenges').doc(challengeId).get()
+    row = data && data[0]
+  } catch (e) {
+    row = null
+  }
+  const now = Date.now()
+  if (!row || row.used || row.userId !== userId || row.activityId !== activityId) fail('请重新完成滑块验证')
+  if (now > Number(row.expireAt)) fail('验证已过期，请重试')
+  if (now - Number(row.createdAt) < 200) fail('请拖动滑块对准缺口')
+  if (!sliderMatches(row.targetX, sliderX)) fail('请把滑块对准缺口')
+  await db.collection('register_challenges').doc(challengeId).update({ used: true })
 }
 
 const actions = {
@@ -276,6 +307,7 @@ const actions = {
     }
     list = list
       .filter((a) => !a.deleted)
+      .filter((a) => (query.manage && core.isAdmin(user)) || !a.inviteOnly)
       .filter((a) => canSeeActivity(a, user))
       .map((a) => hydrateActivity(a, allRegs))
     if (query.status) list = list.filter((a) => a.status === query.status)
@@ -290,18 +322,19 @@ const actions = {
     const { data: rows } = await db.collection('activities').doc(id).get()
     const raw = rows[0]
     if (!raw || raw.deleted) fail('活动不存在')
-    if (!canSeeActivity(raw, user)) fail('活动不存在')
+    if (!canSeeActivity(raw, user)) fail('暂不可报名')
     await repairRegistrations(await regsOf(id))
-    const regs = (await regsOf(id))
+    const allRegs = (await regsOf(id))
       .filter((r) => r.status !== 'cancelled')
       .sort((x, y) => {
         if (x.status !== y.status) return x.status === 'confirmed' ? -1 : 1
         return String(x.createdAt || '').localeCompare(String(y.createdAt || ''))
       })
-    const a = hydrateActivity(raw, regs)
+    const regs = allRegs.filter((r) => isListedReg(raw, r))
+    const a = hydrateActivity(raw, allRegs)
     a.registrations = regs
     a.myRegistration =
-      regs.find(
+      allRegs.find(
         (r) => r.userId === user._id || (normPhone(r.phone) && normPhone(r.phone) === normPhone(user.phone))
       ) || null
     a.canRegister = !!(canRegisterActivity(raw, user) && raw.status === 'open')
@@ -328,6 +361,7 @@ const actions = {
       maxCount: Number(data.maxCount),
       allowGroupIds,
       notice: data.notice || '',
+      inviteOnly: !!data.inviteOnly,
       status: data.publish === false ? 'draft' : 'open',
       deleted: false,
       creatorId: creator._id,
@@ -380,6 +414,7 @@ const actions = {
       'selfRegister'
     ].forEach((k) => delete patch[k])
     if (patch.maxCount !== undefined) patch.maxCount = Number(patch.maxCount)
+    if (patch.inviteOnly !== undefined) patch.inviteOnly = !!patch.inviteOnly
     await db.collection('activities').doc(id).update(patch)
     const { data: next } = await db.collection('activities').doc(id).get()
     return hydrateActivity(next[0], await regsOf(id))
@@ -406,25 +441,22 @@ const actions = {
     const activity = rows[0]
     if (!activity || activity.deleted) fail('活动不存在')
     if (activity.status !== 'open') fail('当前不可报名')
+    const viaInvite = data.fromInvite === true || data.fromInvite === 'true' || data.fromInvite === 1
     const now = Date.now()
-    if (activity.registerStart && now < toTs(activity.registerStart)) fail('报名尚未开始')
+    const startTs = activity.registerStart ? toTs(activity.registerStart) : NaN
+    if (!viaInvite && Number.isFinite(startTs) && now < startTs) fail('报名尚未开始')
     if (activity.registerEnd && now > toTs(activity.registerEnd)) fail('报名已结束')
     if (!canRegisterActivity(activity, u)) fail('您所在组别不可报名本活动')
 
-    const name = String(data.name || u.realName || u.nickname || '').trim()
-    const phone = normPhone(data.phone || u.phone)
-    const department = data.department || u.department || ''
-    if (!name || !/^1\d{10}$/.test(phone)) fail('请填写姓名和正确的手机号')
-    if (data.isProxy && normPhone(u.phone) && phone === normPhone(u.phone)) {
+    const self = !data.isProxy
+    const name = self
+      ? String(u.realName || u.nickname || '').trim()
+      : String(data.name || '').trim()
+    const phone = normPhone(self ? u.phone : data.phone)
+    const department = self ? u.department || '' : data.department || ''
+    if (!name || !/^1\d{10}$/.test(phone)) fail(self ? '请先完善个人资料中的姓名和手机号' : '请填写姓名和正确的手机号')
+    if (!self && normPhone(u.phone) && phone === normPhone(u.phone)) {
       fail('代报名不能填写本人手机号')
-    }
-
-    const userPatch = {}
-    if (!data.isProxy && !u.realName && name) userPatch.realName = name
-    if (!data.isProxy && !u.phone && phone) userPatch.phone = phone
-    if (!data.isProxy && department && !u.department) userPatch.department = department
-    if (Object.keys(userPatch).length) {
-      await db.collection('users').doc(u._id).update(userPatch)
     }
 
     const existing = await repairRegistrations(await regsOf(activityId))
@@ -433,6 +465,7 @@ const actions = {
     if (!data.isProxy && existing.some((r) => r.status !== 'cancelled' && r.userId === u._id)) {
       fail('您已报名或已在排队')
     }
+    if (!viaInvite) await consumeRegisterChallenge(u._id, activityId, data.challengeId, data.sliderX)
 
     const confirmed = existing.filter((r) => r.status === 'confirmed')
     const queued = existing.filter((r) => r.status === 'queued')
@@ -447,6 +480,7 @@ const actions = {
       department,
       isProxy: !!data.isProxy,
       proxyByUserId: data.isProxy ? u._id : '',
+      inviteEarly: !!(viaInvite && Number.isFinite(startTs) && now < startTs),
       status: full ? 'queued' : 'confirmed',
       queueNo: full ? queued.length + 1 : 0,
       createdAt: nowIso()
@@ -456,6 +490,36 @@ const actions = {
     const saved = after.find((r) => r._id === rid)
     if (!saved || saved.status === 'cancelled') fail('该手机号已报名或已在排队')
     return saved
+  },
+
+  async createRegisterChallenge(data = {}, { userId }) {
+    const u = await needUser(userId)
+    const activityId = data.activityId
+    if (!activityId) fail('缺少活动 id')
+    const { data: rows } = await db.collection('activities').doc(activityId).get()
+    const activity = rows[0]
+    if (!activity || activity.deleted || activity.status !== 'open') fail('当前不可报名')
+    if (!canRegisterActivity(activity, u)) fail('暂不可报名')
+    const targetX = randomTargetX()
+    const id = nid('rc_')
+    const now = Date.now()
+    await setDoc('register_challenges', id, {
+      userId: u._id,
+      activityId,
+      targetX,
+      createdAt: now,
+      expireAt: now + 2 * 60 * 1000,
+      used: false
+    })
+    const pic = renderSlider(targetX)
+    return {
+      challengeId: id,
+      image: pic.image,
+      pieceImage: pic.pieceImage,
+      width: WIDTH,
+      height: HEIGHT,
+      piece: PIECE
+    }
   },
 
   async cancelActivityRegistration(data = {}, { userId }) {

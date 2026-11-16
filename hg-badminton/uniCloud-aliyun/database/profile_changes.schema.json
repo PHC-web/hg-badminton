@@ -1,0 +1,27 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "status"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": {},
+    "userId": { "bsonType": "string" },
+    "realName": { "bsonType": "string" },
+    "phone": { "bsonType": "string" },
+    "department": { "bsonType": "string" },
+    "prevRealName": { "bsonType": "string" },
+    "prevPhone": { "bsonType": "string" },
+    "prevDepartment": { "bsonType": "string" },
+    "status": { "bsonType": "string", "description": "pending | approved | rejected" },
+    "reason": { "bsonType": "string" },
+    "reviewerId": { "bsonType": "string" },
+    "createdAt": {},
+    "updatedAt": {},
+    "reviewedAt": {}
+  }
+}

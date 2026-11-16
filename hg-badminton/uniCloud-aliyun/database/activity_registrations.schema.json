@@ -19,6 +19,7 @@
     "proxyByUserId": { "bsonType": "string" },
     "status": { "bsonType": "string", "description": "confirmed / queued / cancelled" },
     "queueNo": { "bsonType": "int" },
+    "inviteEarly": { "bsonType": "bool", "description": "通过邀请海报在报名开始前写入" },
     "createdAt": {}
   }
 }
