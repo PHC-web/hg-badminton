@@ -221,6 +221,91 @@ async function consumeRegisterChallenge(userId, activityId, challengeId, sliderX
   await db.collection('register_challenges').doc(challengeId).update({ used: true })
 }
 
+async function aliveDocs(collection, ids) {
+  const list = [...new Set(ids.filter(Boolean))]
+  const map = new Map()
+  for (let i = 0; i < list.length; i += 100) {
+    const part = list.slice(i, i + 100)
+    try {
+      const { data } = await db.collection(collection).where({ _id: db.command.in(part) }).limit(100).get()
+      ;(data || []).forEach((row) => {
+        if (row && !row.deleted) map.set(row._id, row)
+      })
+    } catch (e) {
+      /* 这一批查不到就不当作仍在的记录 */
+    }
+  }
+  return map
+}
+
+async function myActivityRegs(user) {
+  const { data } = await db.collection('activity_registrations').where({ userId: user._id }).limit(500).get()
+  const rows = (data || []).filter((row) => row.status !== 'cancelled')
+  if (user.phone) {
+    try {
+      const { data: byPhone } = await db.collection('activity_registrations').where({ phone: user.phone }).limit(500).get()
+      const ids = new Set(rows.map((row) => row._id))
+      ;(byPhone || []).forEach((row) => {
+        if (row.status !== 'cancelled' && !ids.has(row._id)) rows.push(row)
+      })
+    } catch (e) {
+      /* 按手机号补查失败时，仍保留本人报名记录 */
+    }
+  }
+  return rows
+}
+
+function activityCard(activity, regStatus) {
+  return {
+    _id: activity._id,
+    name: activity.name || '',
+    location: activity.location || '',
+    startTime: activity.startTime || '',
+    endTime: activity.endTime || '',
+    registerEnd: activity.registerEnd || '',
+    status: activity.status || '',
+    regStatus: regStatus || ''
+  }
+}
+
+async function myActivityCards(user) {
+  const rows = await myActivityRegs(user)
+  const activities = await aliveDocs('activities', rows.map((row) => row.activityId))
+  const best = new Map()
+  rows.forEach((row) => {
+    const activity = activities.get(row.activityId)
+    if (!activity) return
+    const prev = best.get(activity._id)
+    if (!prev || (row.status === 'confirmed' && prev.regStatus !== 'confirmed')) {
+      best.set(activity._id, activityCard(activity, row.status))
+    }
+  })
+  return [...best.values()].sort((a, b) => String(b.startTime || '').localeCompare(String(a.startTime || '')))
+}
+
+async function myMatchCards(user) {
+  const { data: teams } = await db.collection('teams').limit(500).get()
+  const matchIds = []
+  ;(teams || []).forEach((team) => {
+    const inTeam =
+      team.captainId === user._id ||
+      (team.members || []).some((member) => member.userId === user._id && member.status === 'active')
+    if (inTeam && team.matchId) matchIds.push(team.matchId)
+  })
+  const matches = await aliveDocs('matches', matchIds)
+  return [...matches.values()]
+    .map((match) => ({
+      _id: match._id,
+      name: match.name || '',
+      location: match.location || '',
+      startDate: match.startDate || '',
+      endDate: match.endDate || '',
+      status: match.status || '',
+      matchNo: match.matchNo || ''
+    }))
+    .sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')))
+}
+
 const actions = {
   /** 批量导入本地活动（迁移用） */
   async importBundle(data = {}, { userId }) {
@@ -562,39 +647,27 @@ const actions = {
   async getMyStats(_data, { userId }) {
     const u = await getUser(userId)
     if (!u) return { activityCount: 0, matchCount: 0 }
-    let activityCount = 0
     try {
-      const { data } = await db.collection('activity_registrations').where({ userId: u._id }).limit(500).get()
-      activityCount = (data || []).filter((r) => r.status !== 'cancelled').length
-      if (u.phone) {
-        const { data: byPhone } = await db
-          .collection('activity_registrations')
-          .where({ phone: u.phone })
-          .limit(500)
-          .get()
-        const ids = new Set((data || []).map((r) => r._id))
-        ;(byPhone || []).forEach((r) => {
-          if (r.status !== 'cancelled' && !ids.has(r._id)) activityCount += 1
-        })
+      const rows = await myActivityRegs(u)
+      const activities = await aliveDocs('activities', rows.map((row) => row.activityId))
+      const matches = await myMatchCards(u)
+      return {
+        activityCount: rows.filter((row) => activities.has(row.activityId)).length,
+        matchCount: matches.length
       }
     } catch (e) {
-      activityCount = 0
+      return { activityCount: 0, matchCount: 0 }
     }
-    let matchCount = 0
-    try {
-      const { data: teams } = await db.collection('teams').limit(500).get()
-      const matchIds = new Set()
-      ;(teams || []).forEach((t) => {
-        const inTeam =
-          t.captainId === u._id ||
-          (t.members || []).some((m) => m.userId === u._id && m.status === 'active')
-        if (inTeam) matchIds.add(t.matchId)
-      })
-      matchCount = matchIds.size
-    } catch (e) {
-      matchCount = 0
-    }
-    return { activityCount, matchCount }
+  },
+
+  async listMyActivities(_data, { userId }) {
+    const u = await needUser(userId)
+    return myActivityCards(u)
+  },
+
+  async listMyMatches(_data, { userId }) {
+    const u = await needUser(userId)
+    return myMatchCards(u)
   }
 }
 

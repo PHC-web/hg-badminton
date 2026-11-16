@@ -133,6 +133,10 @@
     {
       "path": "pages/mine/notify",
       "style": { "navigationStyle": "custom", "navigationBarTitleText": "消息通知" }
+    },
+    {
+      "path": "pages/mine/records",
+      "style": { "navigationStyle": "custom", "navigationBarTitleText": "参加记录" }
     }
   ],
   "globalStyle": {

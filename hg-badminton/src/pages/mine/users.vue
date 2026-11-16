@@ -5,7 +5,23 @@
       <view class="rule-box">
         点击用户可调整角色或所属组别。角色：{{ user.isSuper ? '管理员、裁判、队长、队员' : '裁判、队长、队员' }}。
       </view>
-      <view v-for="u in list" :key="u._id" class="card item" @click="edit(u)">
+      <view class="card filters">
+        <view class="field">
+          <text class="field-label">组别</text>
+          <picker :range="groupOptions" range-key="name" :value="groupIndex" @change="onGroup">
+            <view class="input picker">{{ currentGroupName }}</view>
+          </picker>
+        </view>
+        <view class="field">
+          <text class="field-label">姓名</text>
+          <input class="input" v-model="keywordName" placeholder="输入姓名模糊搜索" />
+        </view>
+        <view class="field">
+          <text class="field-label">手机号</text>
+          <input class="input" v-model="keywordPhone" type="number" placeholder="输入手机号模糊搜索" />
+        </view>
+      </view>
+      <view v-for="u in shown" :key="u._id" class="card item" @click="edit(u)">
         <view class="row">
           <hg-avatar :name="u.realName || u.nickname" :src="u.avatar" />
           <view class="meta">
@@ -16,12 +32,14 @@
           <text class="go">调整 ›</text>
         </view>
       </view>
+      <hg-empty v-if="list.length && !shown.length" text="没有符合条件的用户" />
+      <hg-empty v-else-if="!list.length" text="暂无用户" />
     </view>
   </view>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
@@ -31,6 +49,43 @@ import { roleLabel, maskPhone, toast } from '@/utils/format'
 const user = useUserStore()
 const list = ref([])
 const groups = ref([])
+const groupId = ref('')
+const keywordName = ref('')
+const keywordPhone = ref('')
+
+const groupOptions = computed(() => [
+  { _id: '', name: '全部组别' },
+  ...groups.value.map((g) => ({ _id: g._id, name: g.name })),
+  { _id: '__none', name: '未分配' }
+])
+const groupIndex = computed(() => {
+  const index = groupOptions.value.findIndex((g) => g._id === groupId.value)
+  return index < 0 ? 0 : index
+})
+const currentGroupName = computed(() => groupOptions.value[groupIndex.value]?.name || '全部组别')
+const shown = computed(() => {
+  const selected = groupOptions.value[groupIndex.value]?._id || ''
+  const nameQuery = keywordName.value.trim().toLowerCase()
+  const phoneQuery = keywordPhone.value.replace(/\D/g, '')
+  return list.value.filter((u) => {
+    if (selected === '__none') {
+      if ((u.groupIds || []).length) return false
+    } else if (selected && !(u.groupIds || []).includes(selected)) {
+      return false
+    }
+    if (nameQuery) {
+      const name = `${u.realName || ''} ${u.nickname || ''}`.toLowerCase()
+      if (!name.includes(nameQuery)) return false
+    }
+    if (phoneQuery && !String(u.phone || '').replace(/\D/g, '').includes(phoneQuery)) return false
+    return true
+  })
+})
+
+function onGroup(e) {
+  const option = groupOptions.value[Number(e.detail.value)] || groupOptions.value[0]
+  groupId.value = option._id
+}
 
 async function load() {
   list.value = await api.listUsers()
@@ -123,6 +178,12 @@ onShow(load)
 
 <style lang="scss" scoped>
 .item { padding: 28rpx; margin-bottom: 16rpx; }
+.filters { padding: 28rpx 28rpx 8rpx; margin-bottom: 20rpx; }
+.picker {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
 .meta { flex: 1; margin-left: 16rpx; }
 .n { font-weight: 600; }
 .s { font-size: 22rpx; color: $hg-text3; margin-top: 4rpx; }

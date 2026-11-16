@@ -613,6 +613,62 @@ function consumeRegisterChallenge(userId, activityId, challengeId, sliderX) {
   col('register_challenges').update(challengeId, { used: true })
 }
 
+function myActivityRegs(user) {
+  if (!user || isGuestUser(user)) return []
+  return col('activity_registrations').find(
+    (row) =>
+      row.status !== 'cancelled' &&
+      (row.userId === user._id || (user.phone && row.phone === user.phone))
+  )
+}
+
+function myActivityCards(user) {
+  const regs = myActivityRegs(user)
+  const activities = new Map(col('activities').find((item) => item && !item.deleted).map((item) => [item._id, item]))
+  const best = new Map()
+  regs.forEach((row) => {
+    const activity = activities.get(row.activityId)
+    if (!activity) return
+    const prev = best.get(activity._id)
+    if (!prev || (row.status === 'confirmed' && prev.regStatus !== 'confirmed')) {
+      best.set(activity._id, {
+        _id: activity._id,
+        name: activity.name || '',
+        location: activity.location || '',
+        startTime: activity.startTime || '',
+        endTime: activity.endTime || '',
+        registerEnd: activity.registerEnd || '',
+        status: activity.status || '',
+        regStatus: row.status || ''
+      })
+    }
+  })
+  return [...best.values()].sort((a, b) => String(b.startTime || '').localeCompare(String(a.startTime || '')))
+}
+
+function myMatchCards(user) {
+  if (!user || isGuestUser(user)) return []
+  const ids = new Set()
+  col('teams').all().forEach((team) => {
+    const inTeam =
+      team.captainId === user._id ||
+      (team.members || []).some((member) => member.userId === user._id && member.status === 'active')
+    if (inTeam && team.matchId) ids.add(team.matchId)
+  })
+  return col('matches')
+    .find((match) => match && !match.deleted && ids.has(match._id))
+    .map((match) => ({
+      _id: match._id,
+      name: match.name || '',
+      location: match.location || '',
+      startDate: match.startDate || '',
+      endDate: match.endDate || '',
+      status: match.status || '',
+      matchNo: match.matchNo || ''
+    }))
+    .sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')))
+}
+
 export const service = {
   init() {
     // 不再自动注入演示账号；空库可用微信登录后由管理员发布活动/比赛
@@ -1347,19 +1403,21 @@ export const service = {
     if (!u || isGuestUser(u)) {
       return { activityCount: 0, matchCount: 0 }
     }
-    const activityCount = col('activity_registrations').find(
-      (r) =>
-        r.status !== 'cancelled' &&
-        (r.userId === u._id || (u.phone && r.phone === u.phone))
-    ).length
-    const matchIds = new Set()
-    col('teams').all().forEach((t) => {
-      const inTeam =
-        t.captainId === u._id ||
-        (t.members || []).some((m) => m.userId === u._id && m.status === 'active')
-      if (inTeam) matchIds.add(t.matchId)
-    })
-    return { activityCount, matchCount: matchIds.size }
+    const alive = new Set(col('activities').find((item) => item && !item.deleted).map((item) => item._id))
+    return {
+      activityCount: myActivityRegs(u).filter((row) => alive.has(row.activityId)).length,
+      matchCount: myMatchCards(u).length
+    }
+  },
+
+  listMyActivities(payload, ctx) {
+    const u = needUser(resolveCtx(payload, ctx))
+    return myActivityCards(u)
+  },
+
+  listMyMatches(payload, ctx) {
+    const u = needUser(resolveCtx(payload, ctx))
+    return myMatchCards(u)
   },
 
   // ---------- 比赛 ----------

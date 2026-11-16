@@ -57,6 +57,8 @@ const CLOUD_ROUTES = {
   createRegisterChallenge: ['activity', 'createRegisterChallenge'],
   cancelActivityRegistration: ['activity', 'cancelActivityRegistration'],
   getMyStats: ['activity', 'getMyStats'],
+  listMyActivities: ['activity', 'listMyActivities'],
+  listMyMatches: ['activity', 'listMyMatches'],
   importActivityBundle: ['activity', 'importBundle'],
 
   listMatches: ['match', 'listMatches'],
@@ -422,6 +424,8 @@ export const api = {
   cancelActivityRegistration: (d) => call('cancelActivityRegistration', d),
   listNotifications: () => call('listNotifications'),
   getMyStats: () => call('getMyStats'),
+  listMyActivities: () => call('listMyActivities'),
+  listMyMatches: () => call('listMyMatches'),
 
   listMatches: (d) => call('listMatches', d),
   getMatch: (id) => call('getMatch', id),

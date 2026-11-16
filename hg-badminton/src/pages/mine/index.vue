@@ -24,12 +24,12 @@
     <view v-if="user.isGuest" class="guest-body">
       <view class="pad stretch">
         <view class="stat-panel">
-          <view class="stat">
+          <view class="stat" @click="openRecords('activity')">
             <view class="num">{{ stats.activityCount }}</view>
             <view class="lbl">参加活动次数</view>
           </view>
           <view class="stat-div" />
-          <view class="stat">
+          <view class="stat" @click="openRecords('match')">
             <view class="num">{{ stats.matchCount }}</view>
             <view class="lbl">参加比赛次数</view>
           </view>
@@ -45,12 +45,12 @@
 
     <view v-else class="pad">
       <view class="stat-panel logged">
-        <view class="stat">
+        <view class="stat" @click="openRecords('activity')">
           <view class="num">{{ stats.activityCount }}</view>
           <view class="lbl">参加活动次数</view>
         </view>
         <view class="stat-div" />
-        <view class="stat">
+        <view class="stat" @click="openRecords('match')">
           <view class="num">{{ stats.matchCount }}</view>
           <view class="lbl">参加比赛次数</view>
         </view>
@@ -144,6 +144,14 @@ function go(url) {
 
 function goLogin() {
   uni.navigateTo({ url: '/pages/login/index' })
+}
+
+function openRecords(type) {
+  if (!user.loggedIn) {
+    goLogin()
+    return
+  }
+  uni.navigateTo({ url: `/pages/mine/records?type=${type}` })
 }
 
 async function loadStats() {
