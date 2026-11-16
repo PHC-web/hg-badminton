@@ -383,6 +383,74 @@ function refreshFixtureResult(fixtureId) {
   }
 }
 
+function normPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (digits.length < 11) return ''
+  return digits.slice(-11)
+}
+
+function sameRegistrant(a, b) {
+  if (a.userId && b.userId && a.userId === b.userId) return true
+  const pa = normPhone(a.phone)
+  const pb = normPhone(b.phone)
+  return !!(pa && pb && pa === pb)
+}
+
+function repairActivityRegistrations(activityId) {
+  const list = col('activity_registrations').find((r) => r.activityId === activityId)
+  const active = list.filter((r) => r.status !== 'cancelled')
+  const parent = active.map((_, i) => i)
+  const find = (i) => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]]
+      i = parent[i]
+    }
+    return i
+  }
+  for (let i = 0; i < active.length; i++) {
+    for (let j = i + 1; j < active.length; j++) {
+      if (!sameRegistrant(active[i], active[j])) continue
+      const a = find(i)
+      const b = find(j)
+      if (a !== b) parent[a] = b
+    }
+  }
+  const groups = new Map()
+  active.forEach((r, i) => {
+    const g = find(i)
+    if (!groups.has(g)) groups.set(g, [])
+    groups.get(g).push(r)
+  })
+  let freedConfirmed = false
+  let changed = false
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    group.sort(
+      (a, b) =>
+        String(a.createdAt || '').localeCompare(String(b.createdAt || '')) ||
+        String(a._id || '').localeCompare(String(b._id || ''))
+    )
+    for (const extra of group.slice(1)) {
+      if (extra.status === 'confirmed') freedConfirmed = true
+      extra.status = 'cancelled'
+      col('activity_registrations').update(extra._id, { status: 'cancelled' })
+      changed = true
+    }
+  }
+  if (changed) {
+    const queued = col('activity_registrations')
+      .find((r) => r.activityId === activityId && r.status === 'queued')
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    queued.forEach((r, i) => {
+      if (r.queueNo === i + 1) return
+      col('activity_registrations').update(r._id, { queueNo: i + 1 })
+    })
+  }
+  if (!freedConfirmed) return
+  let guard = 0
+  while (guard < 20 && promoteQueue(activityId)) guard++
+}
+
 function promoteQueue(activityId) {
   const activity = col('activities').findOne(activityId)
   if (!activity) return null
@@ -794,6 +862,13 @@ export const service = {
   listActivities(query = {}, ctx) {
     const user = resolveCtx(ctx).user
     if (isGuestUser(user)) return getGuestActivityList()
+    const activityIds = new Set(
+      col('activity_registrations')
+        .all()
+        .map((r) => r.activityId)
+        .filter(Boolean)
+    )
+    activityIds.forEach((id) => repairActivityRegistrations(id))
     let list = col('activities')
       .all()
       .filter((a) => a && !a.deleted && a._id !== GUEST_ACTIVITY_ID && !a.guestOnly)
@@ -812,6 +887,7 @@ export const service = {
       fail('活动不存在')
     }
     if (id === GUEST_ACTIVITY_ID) fail('活动不存在')
+    repairActivityRegistrations(id)
     const a = hydrateActivity(col('activities').findOne(id))
     if (!a || a.deleted || a.guestOnly) fail('活动不存在')
     if (!canSeeActivity(a, user)) fail('活动不存在')
@@ -823,7 +899,9 @@ export const service = {
       })
     a.registrations = regs
     a.myRegistration = user
-      ? regs.find((r) => r.userId === user._id || (r.phone && r.phone === user.phone))
+      ? regs.find(
+          (r) => r.userId === user._id || (normPhone(r.phone) && normPhone(r.phone) === normPhone(user.phone))
+        )
       : null
     a.canRegister = !!(user && canRegisterActivity(a, user) && a.status === 'open')
     return a
@@ -926,31 +1004,34 @@ export const service = {
     if (activity.registerEnd && now > new Date(activity.registerEnd).getTime()) fail('报名已结束')
     if (!canRegisterActivity(activity, u)) fail('您所在组别不可报名本活动')
 
-    const name = data.name || u.realName || u.nickname
-    const phone = data.phone || u.phone
+    const name = String(data.name || u.realName || u.nickname || '').trim()
+    const phone = normPhone(data.phone || u.phone)
     const department = data.department || u.department || ''
-    if (!name || !phone) fail('请填写姓名和手机号')
+    if (!name || !/^1\d{10}$/.test(phone)) fail('请填写姓名和正确的手机号')
+    if (data.isProxy && normPhone(u.phone) && phone === normPhone(u.phone)) fail('代报名不能填写本人手机号')
 
-    col('users').update(u._id, {
-      realName: u.realName || name,
-      department: department || u.department,
-      phone: u.phone || phone
-    })
+    if (!data.isProxy) {
+      col('users').update(u._id, {
+        realName: u.realName || name,
+        department: department || u.department,
+        phone: u.phone || phone
+      })
+    }
 
-    const exist = col('activity_registrations').findOne(
-      (r) => r.activityId === data.activityId && r.status !== 'cancelled' && (r.userId === u._id || r.phone === phone)
+    repairActivityRegistrations(data.activityId)
+    const active = col('activity_registrations').find(
+      (r) => r.activityId === data.activityId && r.status !== 'cancelled'
     )
-    if (exist && !data.isProxy) fail('您已报名或已在排队')
+    if (active.some((r) => normPhone(r.phone) === phone)) fail('该手机号已报名或已在排队')
+    if (!data.isProxy && active.some((r) => r.userId === u._id)) fail('您已报名或已在排队')
 
     if (data.isProxy && data.phone) {
       service.addContact({ name, phone, department }, { user: col('users').findOne(u._id) })
     }
 
-    const confirmed = col('activity_registrations').find(
-      (r) => r.activityId === data.activityId && r.status === 'confirmed'
-    )
+    const confirmed = active.filter((r) => r.status === 'confirmed')
     const full = confirmed.length >= activity.maxCount
-    const queued = col('activity_registrations').find((r) => r.activityId === data.activityId && r.status === 'queued')
+    const queued = active.filter((r) => r.status === 'queued')
     const rec = {
       _id: nid('ar_'),
       activityId: data.activityId,
@@ -965,7 +1046,10 @@ export const service = {
       createdAt: nowIso()
     }
     col('activity_registrations').insert(rec)
-    return rec
+    repairActivityRegistrations(data.activityId)
+    const saved = col('activity_registrations').findOne(rec._id)
+    if (!saved || saved.status === 'cancelled') fail('该手机号已报名或已在排队')
+    return saved
   },
 
   cancelActivityRegistration({ registrationId, activityId }, ctx) {

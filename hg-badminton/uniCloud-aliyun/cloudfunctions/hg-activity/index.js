@@ -30,6 +30,88 @@ function canRegisterActivity(activity, user) {
   return canSeeActivity(activity, user)
 }
 
+function normPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (digits.length < 11) return ''
+  return digits.slice(-11)
+}
+
+function sameRegistrant(a, b) {
+  if (a.userId && b.userId && a.userId === b.userId) return true
+  const pa = normPhone(a.phone)
+  const pb = normPhone(b.phone)
+  return !!(pa && pb && pa === pb)
+}
+
+/** 同一人（同一 userId 或同一手机号）只保留最早的一条报名 */
+async function repairRegistrations(regs) {
+  const list = regs || []
+  const active = list.filter((r) => r.status !== 'cancelled')
+  const parent = active.map((_, i) => i)
+  const find = (i) => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]]
+      i = parent[i]
+    }
+    return i
+  }
+  for (let i = 0; i < active.length; i++) {
+    for (let j = i + 1; j < active.length; j++) {
+      if (!sameRegistrant(active[i], active[j])) continue
+      const a = find(i)
+      const b = find(j)
+      if (a !== b) parent[a] = b
+    }
+  }
+  const groups = new Map()
+  active.forEach((r, i) => {
+    const g = find(i)
+    if (!groups.has(g)) groups.set(g, [])
+    groups.get(g).push(r)
+  })
+  const promoteIds = new Set()
+  let changed = false
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    group.sort(
+      (a, b) =>
+        String(a.createdAt || '').localeCompare(String(b.createdAt || '')) ||
+        String(a._id || '').localeCompare(String(b._id || ''))
+    )
+    for (const extra of group.slice(1)) {
+      if (extra.status === 'confirmed' && extra.activityId) promoteIds.add(extra.activityId)
+      await db.collection('activity_registrations').doc(extra._id).update({ status: 'cancelled' })
+      extra.status = 'cancelled'
+      changed = true
+    }
+  }
+  if (changed) {
+    const queued = list
+      .filter((r) => r.status === 'queued')
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    for (let i = 0; i < queued.length; i++) {
+      if (queued[i].queueNo === i + 1) continue
+      await db.collection('activity_registrations').doc(queued[i]._id).update({ queueNo: i + 1 })
+      queued[i].queueNo = i + 1
+    }
+  }
+  for (const id of promoteIds) {
+    let guard = 0
+    while (guard < 20 && (await promoteQueue(id))) guard++
+  }
+  return list
+}
+
+function registrationNeedsRepair(regs) {
+  const active = (regs || []).filter((r) => r && r.status !== 'cancelled')
+  for (let i = 0; i < active.length; i++) {
+    for (let j = i + 1; j < active.length; j++) {
+      if (active[i].activityId === active[j].activityId && sameRegistrant(active[i], active[j])) return true
+    }
+  }
+  return false
+}
+
 async function regsOf(activityId) {
   try {
     const { data } = await db
@@ -175,6 +257,23 @@ const actions = {
     } catch (e) {
       allRegs = []
     }
+    if (registrationNeedsRepair(allRegs)) {
+      const byActivity = new Map()
+      allRegs.forEach((r) => {
+        if (!r?.activityId) return
+        if (!byActivity.has(r.activityId)) byActivity.set(r.activityId, [])
+        byActivity.get(r.activityId).push(r)
+      })
+      for (const group of byActivity.values()) {
+        await repairRegistrations(group)
+      }
+      try {
+        const { data } = await db.collection('activity_registrations').limit(1000).get()
+        allRegs = data || []
+      } catch (e) {
+        /* 沿用已修正的内存结果 */
+      }
+    }
     list = list
       .filter((a) => !a.deleted)
       .filter((a) => canSeeActivity(a, user))
@@ -192,6 +291,7 @@ const actions = {
     const raw = rows[0]
     if (!raw || raw.deleted) fail('活动不存在')
     if (!canSeeActivity(raw, user)) fail('活动不存在')
+    await repairRegistrations(await regsOf(id))
     const regs = (await regsOf(id))
       .filter((r) => r.status !== 'cancelled')
       .sort((x, y) => {
@@ -201,7 +301,9 @@ const actions = {
     const a = hydrateActivity(raw, regs)
     a.registrations = regs
     a.myRegistration =
-      regs.find((r) => r.userId === user._id || (r.phone && r.phone === user.phone)) || null
+      regs.find(
+        (r) => r.userId === user._id || (normPhone(r.phone) && normPhone(r.phone) === normPhone(user.phone))
+      ) || null
     a.canRegister = !!(canRegisterActivity(raw, user) && raw.status === 'open')
     return a
   },
@@ -309,25 +411,28 @@ const actions = {
     if (activity.registerEnd && now > toTs(activity.registerEnd)) fail('报名已结束')
     if (!canRegisterActivity(activity, u)) fail('您所在组别不可报名本活动')
 
-    const name = data.name || u.realName || u.nickname
-    const phone = data.phone || u.phone
+    const name = String(data.name || u.realName || u.nickname || '').trim()
+    const phone = normPhone(data.phone || u.phone)
     const department = data.department || u.department || ''
-    if (!name || !phone) fail('请填写姓名和手机号')
+    if (!name || !/^1\d{10}$/.test(phone)) fail('请填写姓名和正确的手机号')
+    if (data.isProxy && normPhone(u.phone) && phone === normPhone(u.phone)) {
+      fail('代报名不能填写本人手机号')
+    }
 
-    // 补全资料
     const userPatch = {}
-    if (!u.realName && name) userPatch.realName = name
-    if (!u.phone && phone) userPatch.phone = phone
-    if (department && !u.department) userPatch.department = department
+    if (!data.isProxy && !u.realName && name) userPatch.realName = name
+    if (!data.isProxy && !u.phone && phone) userPatch.phone = phone
+    if (!data.isProxy && department && !u.department) userPatch.department = department
     if (Object.keys(userPatch).length) {
       await db.collection('users').doc(u._id).update(userPatch)
     }
 
-    const existing = await regsOf(activityId)
-    const exist = existing.find(
-      (r) => r.status !== 'cancelled' && (r.userId === u._id || r.phone === phone)
-    )
-    if (exist && !data.isProxy) fail('您已报名或已在排队')
+    const existing = await repairRegistrations(await regsOf(activityId))
+    const phoneTaken = existing.find((r) => r.status !== 'cancelled' && normPhone(r.phone) === phone)
+    if (phoneTaken) fail('该手机号已报名或已在排队')
+    if (!data.isProxy && existing.some((r) => r.status !== 'cancelled' && r.userId === u._id)) {
+      fail('您已报名或已在排队')
+    }
 
     const confirmed = existing.filter((r) => r.status === 'confirmed')
     const queued = existing.filter((r) => r.status === 'queued')
@@ -347,7 +452,10 @@ const actions = {
       createdAt: nowIso()
     }
     await setDoc('activity_registrations', rid, rec)
-    return rec
+    const after = await repairRegistrations(await regsOf(activityId))
+    const saved = after.find((r) => r._id === rid)
+    if (!saved || saved.status === 'cancelled') fail('该手机号已报名或已在排队')
+    return saved
   },
 
   async cancelActivityRegistration(data = {}, { userId }) {
